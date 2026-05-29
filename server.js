@@ -107,6 +107,10 @@ const apiLimiter = rateLimit({
 app.use('/process', apiLimiter, require('./routes/process'));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
+if (!IS_PRODUCTION) {
+    console.log(`🛠️  Running in development mode`);
+}
+
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
     console.log(`✅ Agent running at http://localhost:${PORT}`);

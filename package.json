@@ -4,7 +4,8 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "cross-env NODE_ENV=production node server.js",
+    "dev": "node server.js",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "lint": "eslint . --ext .js --ignore-pattern node_modules",
@@ -32,6 +33,7 @@
   "type": "commonjs",
   "dependencies": {
     "cors": "^2.8.6",
+    "cross-env": "^10.1.0",
     "dompurify": "^3.4.7",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
