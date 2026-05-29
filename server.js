@@ -3,9 +3,10 @@
 // mounting middleware, wiring routes, and starting the server.
 // All business logic lives in routes/ and helpers/.
 
-const express = require('express');
-const cors    = require('cors');
-const path = require('path');
+const express   = require('express');
+const cors      = require('cors');
+const path      = require('path');
+const rateLimit = require('express-rate-limit');
 const { config } = require('dotenv');
 
 config(); // load .env
@@ -66,7 +67,19 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use('/process', require('./routes/process'));
+// ─── Rate Limiter ────────────────────────────────────────────────────────────
+// 15 requests per IP per minute — cannot be bypassed from the browser
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,  // 1 minute
+    max: 15,              // max 15 requests per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        error: 'Too many requests — you have been rate limited. Please wait a minute and try again.'
+    }
+});
+
+app.use('/process', apiLimiter, require('./routes/process'));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
