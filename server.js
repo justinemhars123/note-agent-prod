@@ -40,12 +40,9 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // In production: always require an origin header (blocks curl/postman abuse)
-        // In development: allow requests with no origin (e.g. same-origin fetch)
+        // Allow requests with no origin (like same-origin static file requests from the browser)
         if (!origin) {
-            return IS_PRODUCTION
-                ? callback(new Error('Not allowed by CORS'))
-                : callback(null, true);
+            return callback(null, true);
         }
 
         if (allowedOrigins.includes(origin)) {
