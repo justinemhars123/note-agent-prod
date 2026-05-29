@@ -85,6 +85,29 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSharedResult(shared);
         clearShareHash();
     }
+
+    // ─── Wire all button event listeners (replaces inline onclick attrs) ──────
+    $('themeBtn')?.addEventListener('click', toggleTheme);
+    $('clearBtn')?.addEventListener('click', clearAll);
+    $('micBtn')?.addEventListener('click', toggleVoiceInput);
+    $('submitBtn')?.addEventListener('click', processNotes);
+    $('advancedToggle')?.addEventListener('click', toggleAdvanced);
+    $('copyBtn')?.addEventListener('click', copyResult);
+    $('exportBtn')?.addEventListener('click', exportResult);
+    $('icsBtn')?.addEventListener('click', exportICS);
+    $('reminderBtn')?.addEventListener('click', enableReminders);
+    $('shareBtn')?.addEventListener('click', shareResult);
+    $('sample1Btn')?.addEventListener('click', () => loadSample(1));
+    $('sample2Btn')?.addEventListener('click', () => loadSample(2));
+    $('sample3Btn')?.addEventListener('click', () => loadSample(3));
+
+    // Textarea input counter (replaces oninput attribute)
+    $('notes')?.addEventListener('input', updateCounter);
+
+    // Mode selector buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => setMode(btn.dataset.mode));
+    });
 });
 
 // ─── Keyboard shortcut: Ctrl/Cmd + Enter ──────────────────────────────────────
@@ -116,15 +139,15 @@ function applyTheme(theme) {
     if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
 }
 
-window.toggleTheme = function () {
+function toggleTheme() {
     const current = document.documentElement.dataset.theme || 'dark';
     const next    = current === 'dark' ? 'light' : 'dark';
     localStorage.setItem('noteagent_theme', next);
     applyTheme(next);
-};
+}
 
 // ─── Sample inputs ────────────────────────────────────────────────────────────
-window.loadSample = function (n) {
+function loadSample(n) {
     const textarea = $('notes');
     textarea.value = SAMPLE_NOTES[n];
     textarea.focus();
@@ -132,10 +155,10 @@ window.loadSample = function (n) {
     initDraft(textarea, updateCounter); // re-init to pick up new value
     textarea.style.borderColor = 'var(--clr-primary)';
     setTimeout(() => { textarea.style.borderColor = ''; }, 600);
-};
+}
 
 // ─── #5: Character counter ────────────────────────────────────────────────────
-window.updateCounter = function () {
+function updateCounter() {
     const textarea = $('notes');
     const counter  = document.querySelector('.char-counter');
     const countEl  = $('charCount');
@@ -146,10 +169,10 @@ window.updateCounter = function () {
     counter.classList.remove('warn', 'limit');
     if      (len >= MAX_CHARS)          counter.classList.add('limit');
     else if (len >= MAX_CHARS * 0.8)    counter.classList.add('warn');
-};
+}
 
 // ─── #7: Clear ───────────────────────────────────────────────────────────────
-window.clearAll = function () {
+function clearAll() {
     $('notes').value = '';
     $('result').classList.add('hidden');
     $('errorBox').classList.add('hidden');
@@ -160,21 +183,21 @@ window.clearAll = function () {
     clearDraft();
     updateCounter();
     $('notes').focus();
-};
+}
 
 // ─── #9: Voice input ─────────────────────────────────────────────────────────
-window.toggleVoiceInput = function () {
+function toggleVoiceInput() {
     const btn = $('micBtn');
     toggleVoice($('notes'), btn, updateCounter);
-};
+}
 
 // ─── Output mode selector ────────────────────────────────────────────────────
-window.setMode = function (mode) {
+function setMode(mode) {
     currentMode = mode;
     document.querySelectorAll('.mode-btn').forEach(b => {
         b.classList.toggle('mode-active', b.dataset.mode === mode);
     });
-};
+}
 
 // ─── #11: Typing animation ────────────────────────────────────────────────────
 function startTypingAnimation() {
@@ -197,15 +220,15 @@ function stopTypingAnimation() {
 }
 
 // ─── Custom prompt panel ──────────────────────────────────────────────────────
-window.toggleAdvanced = function () {
+function toggleAdvanced() {
     const panel = $('advancedPanel');
     const btn   = $('advancedToggle');
     const open  = panel.classList.toggle('hidden');
     btn.textContent = open ? '⚙️ Advanced' : '⚙️ Advanced ▲';
-};
+}
 
 // ─── Main: processNotes ───────────────────────────────────────────────────────
-window.processNotes = async function () {
+async function processNotes() {
     const notes        = $('notes').value.trim();
     const customPrompt = $('customPromptInput')?.value.trim() || '';
 
@@ -265,10 +288,10 @@ window.processNotes = async function () {
     } finally {
         stopTypingAnimation();
     }
-};
+}
 
 // ─── #6: Copy ────────────────────────────────────────────────────────────────
-window.copyResult = async function () {
+async function copyResult() {
     const copyBtn = $('copyBtn');
     const text    = $('todoList').innerText || $('todoList').textContent;
     try {
@@ -277,21 +300,21 @@ window.copyResult = async function () {
     } catch {
         copyBtn.innerHTML = '❌ Failed';
     }
-    setTimeout(() => { copyBtn.innerHTML = '<span id="copyIcon">📋</span> Copy'; }, 2000);
-};
+    setTimeout(() => { copyBtn.innerHTML = '📋 Copy'; }, 2000);
+}
 
 // ─── #9: Export .md ──────────────────────────────────────────────────────────
-window.exportResult = function () {
+function exportResult() {
     const text = ($('todoList').innerText || $('todoList').textContent).trim();
     if (!text) return;
     const date    = new Date().toISOString().slice(0, 10);
     const content = `# My To-Do List\n*Generated by NoteAgent on ${date}*\n\n${text}`;
     downloadFile(`todo-${date}.md`, content, 'text/markdown');
     flashBtn($('exportBtn'), '✅ Saved!', '⬇️ Export');
-};
+}
 
 // ─── Export .ics (calendar) ──────────────────────────────────────────────────
-window.exportICS = function () {
+function exportICS() {
     if (!currentResult) return;
     const lines   = currentResult.split('\n').map(l => l.trim()).filter(Boolean);
     const events  = [];
@@ -325,7 +348,7 @@ window.exportICS = function () {
     });
 
     if (events.length === 0) {
-        alert('No tasks with due dates found to export.');
+        showToast('No tasks with due dates found to export.', 'info');
         return;
     }
 
@@ -340,10 +363,10 @@ window.exportICS = function () {
 
     downloadFile(`noteagent-${new Date().toISOString().slice(0,10)}.ics`, ics, 'text/calendar');
     flashBtn($('icsBtn'), '✅ Saved!', '📅 .ics');
-};
+}
 
 // ─── #8: Share as link ───────────────────────────────────────────────────────
-window.shareResult = function () {
+function shareResult() {
     const btn = $('shareBtn');
     shareAsLink(currentResult, (status, url) => {
         if (status === 'copied') {
@@ -352,7 +375,7 @@ window.shareResult = function () {
             prompt('Copy this link:', url);
         }
     });
-};
+}
 
 // ─── #8: Restore shared result ────────────────────────────────────────────────
 function renderSharedResult(text) {
@@ -389,7 +412,7 @@ function refreshHistory() {
 }
 
 // Browser due-date reminders
-window.enableReminders = async function () {
+async function enableReminders() {
     if (!currentResult) return;
 
     const btn = $('reminderBtn');
@@ -398,13 +421,13 @@ window.enableReminders = async function () {
     if (status === 'scheduled') {
         flashBtn(btn, count > 0 ? `${count} set` : 'Already set', 'Remind');
     } else if (status === 'denied') {
-        alert('Notifications are blocked for this site. Enable them in your browser settings to use reminders.');
+        showToast('Notifications are blocked. Enable them in your browser settings.', 'error');
     } else if (status === 'unsupported') {
-        alert('This browser does not support notifications.');
+        showToast('This browser does not support notifications.', 'error');
     }
 
     updateReminderButton();
-};
+}
 
 function updateReminderButton() {
     const btn = $('reminderBtn');
@@ -443,6 +466,21 @@ function parseDueDate(str, today) {
 
 function formatICSDate(d) {
     return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+// ─── Toast notifications (replaces all alert() calls) ────────────────────────
+function showToast(message, type = 'info', durationMs = 3500) {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'polite');
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('toast-visible'));
+    setTimeout(() => {
+        toast.classList.remove('toast-visible');
+        setTimeout(() => toast.remove(), 300);
+    }, durationMs);
 }
 
 // ─── Generic helpers ──────────────────────────────────────────────────────────

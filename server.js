@@ -7,6 +7,7 @@ const express   = require('express');
 const cors      = require('cors');
 const path      = require('path');
 const rateLimit = require('express-rate-limit');
+const helmet    = require('helmet');
 const { config } = require('dotenv');
 
 config(); // load .env
@@ -53,15 +54,33 @@ const corsOptions = {
     maxAge: 86400 // 24 hours
 };
 
+// ─── Security headers (helmet) ───────────────────────────────────────────────
+// Covers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options,
+//         Referrer-Policy, X-XSS-Protection, Permissions-Policy + more.
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc:  ["'self'"],
+            scriptSrc:   ["'self'"],                                       // No inline scripts
+            styleSrc:    ["'self'", 'https://fonts.googleapis.com'],
+            fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
+            connectSrc:  ["'self'"],                                       // Only talk to own server
+            imgSrc:      ["'self'", 'data:'],
+            frameSrc:    ["'none'"],
+            objectSrc:   ["'none'"],
+            upgradeInsecureRequests: [],
+        }
+    },
+    hsts: {
+        maxAge: 31536000,          // 1 year
+        includeSubDomains: true,
+        preload: true
+    },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    permittedCrossDomainPolicies: false,
+}));
+
 app.use(cors(corsOptions));
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');           // Prevent MIME sniffing
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');                // Prevent clickjacking
-    res.setHeader('X-XSS-Protection', '1; mode=block');            // Enable XSS filtering
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=()');
-    next();
-});
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '10kb' }));

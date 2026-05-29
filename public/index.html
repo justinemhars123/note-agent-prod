@@ -30,8 +30,7 @@
             <div class="header-actions">
                 <span class="badge">AI-Powered</span>
                 <!-- #3: Dark/Light mode toggle -->
-                <button class="icon-action-btn" id="themeBtn" onclick="toggleTheme()"
-                    title="Toggle light/dark mode">☀️</button>
+                <button class="icon-action-btn" id="themeBtn" title="Toggle light/dark mode">☀️</button>
             </div>
         </header>
 
@@ -51,11 +50,10 @@
             <!-- #6: Output mode selector -->
             <div class="mode-selector">
                 <span class="mode-label">Mode:</span>
-                <button class="mode-btn mode-active" data-mode="default" onclick="setMode('default')">
-                    Default</button>
-                <button class="mode-btn" data-mode="simple" onclick="setMode('simple')">Simple</button>
-                <button class="mode-btn" data-mode="meeting" onclick="setMode('meeting')">Meeting</button>
-                <button class="mode-btn" data-mode="email" onclick="setMode('email')">Email</button>
+                <button class="mode-btn mode-active" data-mode="default">Default</button>
+                <button class="mode-btn" data-mode="simple">Simple</button>
+                <button class="mode-btn" data-mode="meeting">Meeting</button>
+                <button class="mode-btn" data-mode="email">Email</button>
             </div>
 
             <!-- Input area -->
@@ -66,16 +64,14 @@
                         Your Notes
                         <span class="label-hint">Paste anything</span>
                     </label>
-                    <button class="clear-btn" id="clearBtn" onclick="clearAll()" title="Clear everything">✕
-                        Clear</button>
+                    <button class="clear-btn" id="clearBtn" title="Clear everything">✕ Clear</button>
                 </div>
 
                 <div class="textarea-wrap">
                     <textarea id="notes"
                         placeholder="e.g. Meeting with the team today at 2pm, finish report by Friday, buy groceries, call the doctor to reschedule..."
-                        spellcheck="true" maxlength="2000" oninput="updateCounter()"></textarea>
-                    <!-- #9: Mic button -->
-                    <button class="mic-btn" id="micBtn" onclick="toggleVoiceInput()" title="Voice input">🎤</button>
+                        spellcheck="true" maxlength="2000"></textarea>
+                    <button class="mic-btn" id="micBtn" title="Voice input">🎤</button>
                 </div>
 
                 <!-- #5: Character counter -->
@@ -86,15 +82,15 @@
                 <!-- Sample prompts -->
                 <div class="samples-row">
                     <span class="samples-label">Try a sample:</span>
-                    <button class="sample-chip" id="sample1Btn" onclick="loadSample(1)">📅 Work day</button>
-                    <button class="sample-chip" id="sample2Btn" onclick="loadSample(2)">🏠 Personal errands</button>
-                    <button class="sample-chip" id="sample3Btn" onclick="loadSample(3)">🚀 Project sprint</button>
+                    <button class="sample-chip" id="sample1Btn">📅 Work day</button>
+                    <button class="sample-chip" id="sample2Btn">🏠 Personal errands</button>
+                    <button class="sample-chip" id="sample3Btn">🚀 Project sprint</button>
                 </div>
             </div>
 
             <!-- #10: Advanced / custom prompt panel -->
             <div class="advanced-row">
-                <button class="advanced-toggle" id="advancedToggle" onclick="toggleAdvanced()">⚙️ Advanced</button>
+                <button class="advanced-toggle" id="advancedToggle">⚙️ Advanced</button>
             </div>
             <div class="advanced-panel hidden" id="advancedPanel">
                 <label class="adv-label" for="customPromptInput">Custom AI Instructions</label>
@@ -105,7 +101,7 @@
             </div>
 
             <!-- Submit -->
-            <button id="submitBtn" onclick="processNotes()">
+            <button id="submitBtn">
                 <span id="btnText">⚡ Generate To-Do List</span>
             </button>
 
@@ -128,16 +124,11 @@
                 <div class="result-header">
                     <h2>✅ Your Action Plan</h2>
                     <div class="result-actions">
-                        <button class="icon-btn" id="copyBtn" onclick="copyResult()" title="Copy to clipboard">📋
-                            Copy</button>
-                        <button class="icon-btn" id="exportBtn" onclick="exportResult()" title="Download .md">⬇️
-                            Export</button>
-                        <button class="icon-btn" id="icsBtn" onclick="exportICS()" title="Download .ics calendar">📅
-                            .ics</button>
-                        <button class="icon-btn" id="reminderBtn" onclick="enableReminders()"
-                            title="Enable browser reminders">Remind</button>
-                        <button class="icon-btn" id="shareBtn" onclick="shareResult()" title="Share as link">🔗
-                            Share</button>
+                        <button class="icon-btn" id="copyBtn" title="Copy to clipboard">📋 Copy</button>
+                        <button class="icon-btn" id="exportBtn" title="Download .md">⬇️ Export</button>
+                        <button class="icon-btn" id="icsBtn" title="Download .ics calendar">📅 .ics</button>
+                        <button class="icon-btn" id="reminderBtn" title="Enable browser reminders">Remind</button>
+                        <button class="icon-btn" id="shareBtn" title="Share as link">🔗 Share</button>
                     </div>
                 </div>
                 <div id="todoList" class="todo-list"></div>
