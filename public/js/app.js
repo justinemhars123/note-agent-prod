@@ -1,0 +1,467 @@
+// ─── app.js — Main entry point ────────────────────────────────────────────────
+// Wires all modules together. No rendering, fetch, or storage logic lives here.
+
+import { fetchTodoList }                                        from './api.js';
+import { saveToHistory, loadHistory, clearHistory,
+         saveCompleted, loadCompleted, clearCompleted }         from './storage.js';
+import { renderTodoList, renderHistorySection,
+         shakeElement, updateProgressBar,
+         setTaskToggleHandler }                                 from './render.js';
+import { initDraft, clearDraft }                               from './draft.js';
+import { toggleVoice, isVoiceSupported }                       from './voice.js';
+import { shareAsLink, getSharedResult, clearShareHash }        from './share.js';
+import { initDueReminders, enableDueReminders,
+         scheduleDueReminders, getReminderPermission }         from './reminders.js';
+import { displayError, clearError }                            from './errorHandler.js';
+import { createCooldown }                                       from './throttle.js';
+import { createSmartRequester }                                 from './dedup.js';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const MAX_CHARS = 2000;
+
+const SAMPLE_NOTES = {
+    1: `Meeting with the team today at 2pm, finish report by Friday, buy groceries, call the doctor to reschedule appointment`,
+    2: `Pick up dry cleaning tomorrow morning, pay electricity bill before the 30th, call mum on Sunday, renew car insurance this week, tidy the garage whenever I get a chance`,
+    3: `Sprint planning session at 9am today, deploy the auth fix to staging by Wednesday, write unit tests for the payment module before Friday's release, update README docs anytime, code review for Sarah's PR today`
+};
+
+const TYPING_MESSAGES = [
+    'AI is reading your notes…',
+    'Extracting tasks…',
+    'Identifying deadlines…',
+    'Organising by priority…',
+    'Almost done…'
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let typingInterval  = null;
+let completedTasks  = new Set();
+let currentMode     = 'default';
+let currentResult   = '';
+let submitCooldown  = createCooldown(1000); // Prevent spam: 1 request per second max
+let requester       = createSmartRequester(5 * 60 * 1000); // 5-minute cache for identical requests
+
+// ─── DOM helpers ──────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    completedTasks = loadCompleted();
+
+    // Register task-toggle handler → persist completion state
+    setTaskToggleHandler((taskText, isChecked) => {
+        isChecked ? completedTasks.add(taskText) : completedTasks.delete(taskText);
+        saveCompleted(completedTasks);
+        updateProgressBar();
+    });
+
+    // Auto-save draft
+    initDraft($('notes'), updateCounter);
+
+    // Dark / light mode preference
+    applyTheme(localStorage.getItem('noteagent_theme') || 'dark');
+
+    // Keyboard shortcut label (Mac vs others)
+    if (navigator.platform.toUpperCase().includes('MAC')) {
+        const hint = $('shortcutHint');
+        if (hint) hint.textContent = '⌘ Enter';
+    }
+
+    // Hide mic button if voice not supported
+    if (!isVoiceSupported()) {
+        const micBtn = $('micBtn');
+        if (micBtn) micBtn.style.display = 'none';
+    }
+
+    updateCounter();
+    refreshHistory();
+    disablePWA();
+    initDueReminders();
+    updateReminderButton();
+
+    // Restore shared result from URL hash
+    const shared = getSharedResult();
+    if (shared) {
+        renderSharedResult(shared);
+        clearShareHash();
+    }
+});
+
+// ─── Keyboard shortcut: Ctrl/Cmd + Enter ──────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        processNotes();
+    }
+});
+
+// ─── PWA service worker registration ─────────────────────────────────────────
+function disablePWA() {
+    if (!('serviceWorker' in navigator)) return;
+
+    navigator.serviceWorker.getRegistrations()
+        .then(registrations => Promise.all(registrations.map(registration => registration.unregister())))
+        .then(() => {
+            if (!('caches' in window)) return;
+            return caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
+        })
+        .then(() => console.log('PWA disabled and old caches cleared'))
+        .catch(error => console.warn('PWA cleanup failed:', error));
+}
+
+// ─── Dark / Light mode ────────────────────────────────────────────────────────
+function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const btn = $('themeBtn');
+    if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+window.toggleTheme = function () {
+    const current = document.documentElement.dataset.theme || 'dark';
+    const next    = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('noteagent_theme', next);
+    applyTheme(next);
+};
+
+// ─── Sample inputs ────────────────────────────────────────────────────────────
+window.loadSample = function (n) {
+    const textarea = $('notes');
+    textarea.value = SAMPLE_NOTES[n];
+    textarea.focus();
+    updateCounter();
+    initDraft(textarea, updateCounter); // re-init to pick up new value
+    textarea.style.borderColor = 'var(--clr-primary)';
+    setTimeout(() => { textarea.style.borderColor = ''; }, 600);
+};
+
+// ─── #5: Character counter ────────────────────────────────────────────────────
+window.updateCounter = function () {
+    const textarea = $('notes');
+    const counter  = document.querySelector('.char-counter');
+    const countEl  = $('charCount');
+    if (!textarea || !counter || !countEl) return;
+
+    const len = textarea.value.length;
+    countEl.textContent = len.toLocaleString();
+    counter.classList.remove('warn', 'limit');
+    if      (len >= MAX_CHARS)          counter.classList.add('limit');
+    else if (len >= MAX_CHARS * 0.8)    counter.classList.add('warn');
+};
+
+// ─── #7: Clear ───────────────────────────────────────────────────────────────
+window.clearAll = function () {
+    $('notes').value = '';
+    $('result').classList.add('hidden');
+    $('errorBox').classList.add('hidden');
+    $('progressSection').classList.add('hidden');
+    $('todoList').innerHTML = '';
+    completedTasks = new Set();
+    clearCompleted();
+    clearDraft();
+    updateCounter();
+    $('notes').focus();
+};
+
+// ─── #9: Voice input ─────────────────────────────────────────────────────────
+window.toggleVoiceInput = function () {
+    const btn = $('micBtn');
+    toggleVoice($('notes'), btn, updateCounter);
+};
+
+// ─── Output mode selector ────────────────────────────────────────────────────
+window.setMode = function (mode) {
+    currentMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.toggle('mode-active', b.dataset.mode === mode);
+    });
+};
+
+// ─── #11: Typing animation ────────────────────────────────────────────────────
+function startTypingAnimation() {
+    $('typingIndicator').classList.remove('hidden');
+    $('submitBtn').classList.add('hidden');
+    let i = 0;
+    const msgEl = $('typingMsg');
+    msgEl.textContent = TYPING_MESSAGES[0];
+    typingInterval = setInterval(() => {
+        i = (i + 1) % TYPING_MESSAGES.length;
+        msgEl.style.opacity = '0';
+        setTimeout(() => { msgEl.textContent = TYPING_MESSAGES[i]; msgEl.style.opacity = '1'; }, 200);
+    }, 2000);
+}
+
+function stopTypingAnimation() {
+    clearInterval(typingInterval);
+    $('typingIndicator').classList.add('hidden');
+    $('submitBtn').classList.remove('hidden');
+}
+
+// ─── Custom prompt panel ──────────────────────────────────────────────────────
+window.toggleAdvanced = function () {
+    const panel = $('advancedPanel');
+    const btn   = $('advancedToggle');
+    const open  = panel.classList.toggle('hidden');
+    btn.textContent = open ? '⚙️ Advanced' : '⚙️ Advanced ▲';
+};
+
+// ─── Main: processNotes ───────────────────────────────────────────────────────
+window.processNotes = async function () {
+    const notes        = $('notes').value.trim();
+    const customPrompt = $('customPromptInput')?.value.trim() || '';
+
+    if (!notes) { shakeElement($('notes')); return; }
+
+    // Rate limiting: prevent spam submissions
+    if (!submitCooldown.check()) {
+        const remainingMs = submitCooldown.getRemainingMs();
+        const remainingSecs = Math.ceil(remainingMs / 1000);
+        shakeElement($('submitBtn'));
+        displayError($('errorBox'), 
+            `Please wait ${remainingSecs}s before submitting again`);
+        return;
+    }
+
+    startTypingAnimation();
+    $('result').classList.add('hidden');
+    $('progressSection').classList.add('hidden');
+    $('todoList').innerHTML = '';
+
+    try {
+        clearError($('errorBox'));
+        
+        // Create a unique key for deduplication/caching
+        // Same notes + mode + custom prompt = same request
+        const requestKey = JSON.stringify({ notes, currentMode, customPrompt });
+        
+        // Use smart requester to deduplicate and cache
+        const { result, mode } = await requester.execute(
+            requestKey,
+            () => fetchTodoList(notes, currentMode, customPrompt)
+        );
+        currentResult = result;
+
+        completedTasks = new Set(); // fresh list → reset completion
+        clearCompleted();
+
+        renderTodoList(result, $('todoList'), completedTasks, mode || currentMode);
+        updateProgressBar();
+        const scheduledCount = scheduleDueReminders(result);
+        if (scheduledCount > 0) flashBtn($('reminderBtn'), 'Reminder set', 'Remind');
+        updateReminderButton();
+
+        $('result').classList.remove('hidden');
+        $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        saveToHistory(result, currentMode);
+        refreshHistory();
+
+    } catch (err) {
+        // Show enhanced error with recovery options
+        displayError($('errorBox'), err, () => {
+            // Retry handler — reset cooldown for user retry
+            submitCooldown.reset();
+            window.processNotes();
+        });
+    } finally {
+        stopTypingAnimation();
+    }
+};
+
+// ─── #6: Copy ────────────────────────────────────────────────────────────────
+window.copyResult = async function () {
+    const copyBtn = $('copyBtn');
+    const text    = $('todoList').innerText || $('todoList').textContent;
+    try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.innerHTML = '✅ Copied!';
+    } catch {
+        copyBtn.innerHTML = '❌ Failed';
+    }
+    setTimeout(() => { copyBtn.innerHTML = '<span id="copyIcon">📋</span> Copy'; }, 2000);
+};
+
+// ─── #9: Export .md ──────────────────────────────────────────────────────────
+window.exportResult = function () {
+    const text = ($('todoList').innerText || $('todoList').textContent).trim();
+    if (!text) return;
+    const date    = new Date().toISOString().slice(0, 10);
+    const content = `# My To-Do List\n*Generated by NoteAgent on ${date}*\n\n${text}`;
+    downloadFile(`todo-${date}.md`, content, 'text/markdown');
+    flashBtn($('exportBtn'), '✅ Saved!', '⬇️ Export');
+};
+
+// ─── Export .ics (calendar) ──────────────────────────────────────────────────
+window.exportICS = function () {
+    if (!currentResult) return;
+    const lines   = currentResult.split('\n').map(l => l.trim()).filter(Boolean);
+    const events  = [];
+    const today   = new Date();
+
+    lines.forEach(line => {
+        if (!line.startsWith('-')) return;
+        const clean    = line.replace(/^[-•]\s*/, '').replace(/^\[\d+\]\s*/, '');
+        // Handle both '→ Due: Friday' and '→ Friday'
+        const dueSplit = clean.split(/→\s*(?:Due:\s*)?/i);
+        const title    = dueSplit[0].trim();
+        const dueStr   = dueSplit[1]?.trim();
+
+        if (!dueStr) return; // skip tasks with no due date
+
+        const dueDate = parseDueDate(dueStr, today);
+        if (!dueDate) return;
+
+        const stamp   = formatICSDate(dueDate);
+        const uid     = `noteagent-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        events.push([
+            'BEGIN:VEVENT',
+            `UID:${uid}`,
+            `DTSTAMP:${formatICSDate(today)}`,
+            `DTSTART;VALUE=DATE:${stamp.slice(0,8)}`,
+            `DTEND;VALUE=DATE:${stamp.slice(0,8)}`,
+            `SUMMARY:${title}`,
+            'END:VEVENT'
+        ].join('\r\n'));
+    });
+
+    if (events.length === 0) {
+        alert('No tasks with due dates found to export.');
+        return;
+    }
+
+    const ics = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//NoteAgent//EN',
+        'CALSCALE:GREGORIAN',
+        ...events,
+        'END:VCALENDAR'
+    ].join('\r\n');
+
+    downloadFile(`noteagent-${new Date().toISOString().slice(0,10)}.ics`, ics, 'text/calendar');
+    flashBtn($('icsBtn'), '✅ Saved!', '📅 .ics');
+};
+
+// ─── #8: Share as link ───────────────────────────────────────────────────────
+window.shareResult = function () {
+    const btn = $('shareBtn');
+    shareAsLink(currentResult, (status, url) => {
+        if (status === 'copied') {
+            flashBtn(btn, '✅ Link copied!', '🔗 Share');
+        } else if (status === 'fallback') {
+            prompt('Copy this link:', url);
+        }
+    });
+};
+
+// ─── #8: Restore shared result ────────────────────────────────────────────────
+function renderSharedResult(text) {
+    currentResult = text;
+    renderTodoList(text, $('todoList'), new Set(), 'default');
+    updateProgressBar();
+    scheduleDueReminders(text);
+    updateReminderButton();
+    $('result').classList.remove('hidden');
+
+    const banner = document.createElement('div');
+    banner.className = 'draft-banner';
+    banner.innerHTML = `<span>🔗 Viewing a shared result.</span><button onclick="this.parentElement.remove()">✕</button>`;
+    document.querySelector('.card').prepend(banner);
+}
+
+// ─── #8: History ─────────────────────────────────────────────────────────────
+function refreshHistory() {
+    renderHistorySection(
+        loadHistory(),
+        (text, mode) => {
+            currentResult = text;
+            currentMode   = mode || 'default';
+            completedTasks = loadCompleted();
+            renderTodoList(text, $('todoList'), completedTasks, currentMode);
+            updateProgressBar();
+            scheduleDueReminders(text);
+            updateReminderButton();
+            $('result').classList.remove('hidden');
+            $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
+        () => { clearHistory(); refreshHistory(); }
+    );
+}
+
+// Browser due-date reminders
+window.enableReminders = async function () {
+    if (!currentResult) return;
+
+    const btn = $('reminderBtn');
+    const { status, count } = await enableDueReminders(currentResult);
+
+    if (status === 'scheduled') {
+        flashBtn(btn, count > 0 ? `${count} set` : 'Already set', 'Remind');
+    } else if (status === 'denied') {
+        alert('Notifications are blocked for this site. Enable them in your browser settings to use reminders.');
+    } else if (status === 'unsupported') {
+        alert('This browser does not support notifications.');
+    }
+
+    updateReminderButton();
+};
+
+function updateReminderButton() {
+    const btn = $('reminderBtn');
+    if (!btn) return;
+
+    const permission = getReminderPermission();
+    btn.disabled = permission === 'unsupported';
+    btn.title = permission === 'granted'
+        ? 'Schedule browser reminders for due dates'
+        : 'Enable browser notifications for due-date reminders';
+}
+
+// ─── ICS helpers ──────────────────────────────────────────────────────────────
+function parseDueDate(str, today) {
+    const dayMap = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+
+    // Normalize: strip leading "by " or "on " (AI sometimes outputs these)
+    let lower = str.toLowerCase().trim().replace(/^(by|on)\s+/, '');
+
+    if (lower === 'today')    return new Date(today);
+    if (lower === 'tomorrow') return new Date(today.getTime() + 86_400_000);
+
+    // Full or partial day name match (e.g. "friday", "this friday")
+    const dayMatch = lower.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+    if (dayMatch) {
+        const target = dayMap[dayMatch[1]];
+        const base   = new Date(today); base.setHours(0,0,0,0);
+        const diff   = (target - base.getDay() + 7) % 7;
+        return new Date(base.getTime() + (diff || 7) * 86_400_000);
+    }
+
+    // Try native date parsing as last resort (e.g. "May 2", "2026-05-01")
+    const parsed = new Date(str);
+    return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatICSDate(d) {
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+// ─── Generic helpers ──────────────────────────────────────────────────────────
+function downloadFile(name, content, type) {
+    const blob = new Blob([content], { type });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = name;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Delay revoke so the browser has time to start the download
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function flashBtn(btn, tempText, original) {
+    if (!btn) return;
+    btn.textContent = tempText;
+    setTimeout(() => { btn.textContent = original; }, 2000);
+}

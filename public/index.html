@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Note-to-Action Agent — paste your messy notes and get a clean, AI-powered to-do list instantly.">
+    <meta name="theme-color" content="#6c63ff">
+    <title>Note-to-Action Agent | AI-Powered Task Organiser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="bg-blob blob-1"></div>
+    <div class="bg-blob blob-2"></div>
+    <div class="bg-blob blob-3"></div>
+
+    <div class="page-wrapper">
+
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">NoteAgent</span>
+            </div>
+            <div class="header-actions">
+                <span class="badge">AI-Powered</span>
+                <!-- #3: Dark/Light mode toggle -->
+                <button class="icon-action-btn" id="themeBtn" onclick="toggleTheme()"
+                    title="Toggle light/dark mode">☀️</button>
+            </div>
+        </header>
+
+        <!-- Hero -->
+        <section class="hero">
+            <h1 class="hero-title">
+                Turn messy notes into<br>
+                <span class="gradient-text">organised action</span>
+            </h1>
+            <p class="hero-subtitle">Paste anything — meeting reminders, random thoughts, deadlines — and the AI agent
+                structures it into a clean to-do list in seconds.</p>
+        </section>
+
+        <!-- Main card -->
+        <main class="card">
+
+            <!-- #6: Output mode selector -->
+            <div class="mode-selector">
+                <span class="mode-label">Mode:</span>
+                <button class="mode-btn mode-active" data-mode="default" onclick="setMode('default')">
+                    Default</button>
+                <button class="mode-btn" data-mode="simple" onclick="setMode('simple')">Simple</button>
+                <button class="mode-btn" data-mode="meeting" onclick="setMode('meeting')">Meeting</button>
+                <button class="mode-btn" data-mode="email" onclick="setMode('email')">Email</button>
+            </div>
+
+            <!-- Input area -->
+            <div class="input-section">
+                <div class="input-label-row">
+                    <label for="notes" class="input-label">
+                        <span class="label-icon">📝</span>
+                        Your Notes
+                        <span class="label-hint">Paste anything</span>
+                    </label>
+                    <button class="clear-btn" id="clearBtn" onclick="clearAll()" title="Clear everything">✕
+                        Clear</button>
+                </div>
+
+                <div class="textarea-wrap">
+                    <textarea id="notes"
+                        placeholder="e.g. Meeting with the team today at 2pm, finish report by Friday, buy groceries, call the doctor to reschedule..."
+                        spellcheck="true" maxlength="2000" oninput="updateCounter()"></textarea>
+                    <!-- #9: Mic button -->
+                    <button class="mic-btn" id="micBtn" onclick="toggleVoiceInput()" title="Voice input">🎤</button>
+                </div>
+
+                <!-- #5: Character counter -->
+                <div class="char-counter">
+                    <span id="charCount">0</span> / 2,000 characters
+                </div>
+
+                <!-- Sample prompts -->
+                <div class="samples-row">
+                    <span class="samples-label">Try a sample:</span>
+                    <button class="sample-chip" id="sample1Btn" onclick="loadSample(1)">📅 Work day</button>
+                    <button class="sample-chip" id="sample2Btn" onclick="loadSample(2)">🏠 Personal errands</button>
+                    <button class="sample-chip" id="sample3Btn" onclick="loadSample(3)">🚀 Project sprint</button>
+                </div>
+            </div>
+
+            <!-- #10: Advanced / custom prompt panel -->
+            <div class="advanced-row">
+                <button class="advanced-toggle" id="advancedToggle" onclick="toggleAdvanced()">⚙️ Advanced</button>
+            </div>
+            <div class="advanced-panel hidden" id="advancedPanel">
+                <label class="adv-label" for="customPromptInput">Custom AI Instructions</label>
+                <textarea id="customPromptInput" class="adv-textarea"
+                    placeholder="Override the default AI instructions. E.g. 'Group tasks by project. Always include time estimates.'"
+                    rows="3"></textarea>
+                <p class="adv-hint">Leave blank to use the default prompt for the selected mode.</p>
+            </div>
+
+            <!-- Submit -->
+            <button id="submitBtn" onclick="processNotes()">
+                <span id="btnText">⚡ Generate To-Do List</span>
+            </button>
+
+            <!-- #11: Typing indicator -->
+            <div id="typingIndicator" class="typing-indicator hidden">
+                <div class="typing-dots"><span></span><span></span><span></span></div>
+                <span id="typingMsg" class="typing-msg">AI is reading your notes…</span>
+            </div>
+
+            <!-- #1: Progress bar -->
+            <div id="progressSection" class="progress-section hidden">
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progressBar"></div>
+                </div>
+                <span class="progress-label" id="progressLabel">0 / 0 done</span>
+            </div>
+
+            <!-- Result area -->
+            <div id="result" class="result hidden">
+                <div class="result-header">
+                    <h2>✅ Your Action Plan</h2>
+                    <div class="result-actions">
+                        <button class="icon-btn" id="copyBtn" onclick="copyResult()" title="Copy to clipboard">📋
+                            Copy</button>
+                        <button class="icon-btn" id="exportBtn" onclick="exportResult()" title="Download .md">⬇️
+                            Export</button>
+                        <button class="icon-btn" id="icsBtn" onclick="exportICS()" title="Download .ics calendar">📅
+                            .ics</button>
+                        <button class="icon-btn" id="reminderBtn" onclick="enableReminders()"
+                            title="Enable browser reminders">Remind</button>
+                        <button class="icon-btn" id="shareBtn" onclick="shareResult()" title="Share as link">🔗
+                            Share</button>
+                    </div>
+                </div>
+                <div id="todoList" class="todo-list"></div>
+            </div>
+
+            <!-- Error -->
+            <div id="errorBox" class="error-box hidden">
+                <span class="error-icon">⚠️</span>
+                <span id="errorMsg">Something went wrong.</span>
+            </div>
+
+        </main>
+
+        <!-- #8: History section -->
+        <section id="historySection" class="history-section hidden">
+            <div class="history-header">
+                <h3 class="history-title">🕓 Recent Results</h3>
+                <button class="clear-history-btn" id="clearHistoryBtn">Clear history</button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+        </section>
+
+        <footer class="footer">
+            Built with Node.js + Express +
+            <a href="https://groq.com" target="_blank" rel="noopener">Groq AI (LLaMA 3)</a>
+        </footer>
+
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+
+</html>
