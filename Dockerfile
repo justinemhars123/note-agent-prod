@@ -12,8 +12,8 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Run tests and linting
-RUN npm run lint && npm test
+# Tests and linting are run in CI; skip during Docker image builds to avoid
+# requiring build-time secrets or slowing the image creation on Render.
 
 # Production stage
 FROM node:20-alpine
