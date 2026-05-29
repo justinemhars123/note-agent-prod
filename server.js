@@ -102,6 +102,7 @@ const apiLimiter = rateLimit({
 });
 
 app.use('/process', apiLimiter, require('./routes/process'));
+app.use('/history', require('./routes/history'));
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 if (!IS_PRODUCTION) {

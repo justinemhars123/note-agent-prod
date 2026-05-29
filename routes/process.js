@@ -204,7 +204,17 @@ router.post('/', async (req, res) => {
             return res.status(500).json({ error: data.error?.message || 'AI returned no result.' });
         }
 
-        res.json({ result: data.choices[0].message.content, provider, mode });
+        const resultText = data.choices[0].message.content;
+
+        // Asynchronously save to Supabase (if configured)
+        if (req.body.userId) {
+            // We don't await this because we don't want to slow down the user's response
+            // saveNote handles its own error catching
+            const { saveNote } = require('../helpers/supabase');
+            saveNote(req.body.userId, notes, resultText, provider, mode);
+        }
+
+        res.json({ result: resultText, provider, mode });
 
     } catch (err) {
         console.error('Process route error:', err);

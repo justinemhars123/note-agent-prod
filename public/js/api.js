@@ -13,7 +13,7 @@ const MAX_CHARS = 2000;
  * @param {string} customPrompt  - optional override system prompt
  * @returns {Promise<{ result: string, provider: string, mode: string }>}
  */
-export async function fetchTodoList(notes, mode = 'default', customPrompt = '') {
+export async function fetchTodoList(notes, mode = 'default', customPrompt = '', userId = null) {
     if (!notes || !notes.trim()) {
         throw new Error('Please add some notes first.');
     }
@@ -24,7 +24,7 @@ export async function fetchTodoList(notes, mode = 'default', customPrompt = '') 
     const response = await fetch('/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes, mode, customPrompt })
+        body: JSON.stringify({ notes, mode, customPrompt, userId })
     });
 
     if (response.status === 429) {

@@ -43,3 +43,21 @@ export function loadCompleted() {
 export function clearCompleted() {
     localStorage.removeItem(COMPLETED_KEY);
 }
+
+// ─── User Identity (Option A: Anonymous UUID) ─────────────────────────────────
+const USER_ID_KEY = 'noteagent_user_id';
+
+export function getUserId() {
+    let id = localStorage.getItem(USER_ID_KEY);
+    if (!id) {
+        // Generate a random UUID-v4 like string
+        id = crypto.randomUUID ? crypto.randomUUID() : 
+            'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        localStorage.setItem(USER_ID_KEY, id);
+    }
+    return id;
+}

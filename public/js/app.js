@@ -3,7 +3,7 @@
 
 import { fetchTodoList }                                        from './api.js';
 import { saveToHistory, loadHistory, clearHistory,
-         saveCompleted, loadCompleted, clearCompleted }         from './storage.js';
+         saveCompleted, loadCompleted, clearCompleted, getUserId } from './storage.js';
 import { renderTodoList, renderHistorySection,
          shakeElement, updateProgressBar,
          setTaskToggleHandler }                                 from './render.js';
@@ -259,7 +259,7 @@ async function processNotes() {
         // Use smart requester to deduplicate and cache
         const { result, mode } = await requester.execute(
             requestKey,
-            () => fetchTodoList(notes, currentMode, customPrompt)
+            () => fetchTodoList(notes, currentMode, customPrompt, getUserId())
         );
         currentResult = result;
 
@@ -393,9 +393,28 @@ function renderSharedResult(text) {
 }
 
 // ─── #8: History ─────────────────────────────────────────────────────────────
-function refreshHistory() {
+async function refreshHistory() {
+    let history = [];
+    try {
+        const userId = getUserId();
+        const res = await fetch(`/history?userId=${userId}`);
+        const data = await res.json();
+        if (res.ok && data.notes) {
+            history = data.notes.map(n => ({
+                text: n.ai_result,
+                mode: n.mode,
+                date: new Date(n.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+            }));
+        } else {
+            history = loadHistory();
+        }
+    } catch (err) {
+        console.warn('Failed to fetch Supabase history, falling back to local', err);
+        history = loadHistory();
+    }
+
     renderHistorySection(
-        loadHistory(),
+        history,
         (text, mode) => {
             currentResult = text;
             currentMode   = mode || 'default';
