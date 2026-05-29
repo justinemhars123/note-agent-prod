@@ -64,7 +64,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 // ─── Rate Limiter ────────────────────────────────────────────────────────────

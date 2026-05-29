@@ -11,7 +11,21 @@ const { callGroq }       = require('../helpers/groq');
 const { callOpenAI }     = require('../helpers/openai');
 
 const router = express.Router();
-const MAX_INPUT_CHARS = 2000;
+const MAX_INPUT_CHARS        = 2000;
+const MAX_CUSTOM_PROMPT_CHARS = 500;
+const VALID_MODES            = ['default', 'simple', 'meeting', 'email'];
+
+// Patterns that indicate prompt injection attempts
+const INJECTION_PATTERNS = [
+    /ignore\s+(all\s+)?(previous|above|prior|earlier)\s+instructions/i,
+    /disregard\s+(all\s+)?instructions/i,
+    /forget\s+everything/i,
+    /you\s+are\s+now/i,
+    /new\s+persona/i,
+    /system\s+prompt/i,
+    /act\s+as\s+(?!a\s+productivity)/i, // allow "act as a productivity assistant"
+    /jailbreak/i,
+];
 
 // ─── System prompts per mode ──────────────────────────────────────────────────
 function buildSystemPrompt(mode, today, customPrompt) {
@@ -118,6 +132,12 @@ async function callAI(payload) {
 router.post('/', async (req, res) => {
     const { notes, mode = 'default', customPrompt = '' } = req.body;
 
+    // ─── Input type safety ─────────────────────────────────────────────────────────
+    if (typeof notes !== 'string') {
+        return res.status(400).json({ error: 'Notes must be a string.' });
+    }
+
+    // ─── Notes validation ─────────────────────────────────────────────────────────
     if (!notes || !notes.trim()) {
         return res.status(400).json({ error: 'No notes provided.' });
     }
@@ -125,6 +145,31 @@ router.post('/', async (req, res) => {
         return res.status(400).json({
             error: `Notes are too long. Keep them under ${MAX_INPUT_CHARS.toLocaleString()} characters.`
         });
+    }
+
+    // ─── Mode allowlist validation ─────────────────────────────────────────────────
+    if (mode && !VALID_MODES.includes(mode)) {
+        return res.status(400).json({
+            error: `Invalid mode. Must be one of: ${VALID_MODES.join(', ')}.`
+        });
+    }
+
+    // ─── Custom prompt validation (prompt injection protection) ──────────────────
+    if (customPrompt) {
+        if (typeof customPrompt !== 'string') {
+            return res.status(400).json({ error: 'Custom prompt must be a string.' });
+        }
+        if (customPrompt.length > MAX_CUSTOM_PROMPT_CHARS) {
+            return res.status(400).json({
+                error: `Custom prompt must be under ${MAX_CUSTOM_PROMPT_CHARS} characters.`
+            });
+        }
+        if (INJECTION_PATTERNS.some(pattern => pattern.test(customPrompt))) {
+            console.warn(`⚠️  Prompt injection attempt blocked: ${customPrompt.slice(0, 80)}...`);
+            return res.status(400).json({
+                error: 'Custom prompt contains disallowed content.'
+            });
+        }
     }
 
     const today = new Date().toLocaleDateString('en-US', {
