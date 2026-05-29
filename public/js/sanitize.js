@@ -12,7 +12,9 @@ import DOMPurify from './vendor/purify.es.mjs';
  * @returns {string} - Sanitized plain-text string
  */
 export function sanitizeText(str) {
-    if (typeof str !== 'string') return '';
+    if (typeof str !== 'string') {
+        return '';
+    }
     // ALLOWED_TAGS: [] means strip every HTML tag, leaving only text nodes
     return DOMPurify.sanitize(str, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 }
@@ -40,7 +42,7 @@ export function sanitizeUserInput(input, maxLength = 2000) {
         return {
             valid: false,
             sanitized: '',
-            error: `Input exceeds ${maxLength} character limit`
+            error: `Input exceeds ${maxLength} character limit`,
         };
     }
 
@@ -57,7 +59,9 @@ export function sanitizeUserInput(input, maxLength = 2000) {
  * @returns {string} - Sanitized output
  */
 export function sanitizeAIOutput(output) {
-    if (typeof output !== 'string') return '';
+    if (typeof output !== 'string') {
+        return '';
+    }
     return sanitizeText(output);
 }
 
@@ -68,7 +72,9 @@ export function sanitizeAIOutput(output) {
  * @returns {string} - HTML-escaped string
  */
 export function escapeHtml(str) {
-    if (typeof str !== 'string') return '';
+    if (typeof str !== 'string') {
+        return '';
+    }
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
@@ -82,7 +88,9 @@ export function escapeHtml(str) {
  * @returns {boolean} - True if potentially dangerous
  */
 export function isSuspicious(str) {
-    if (typeof str !== 'string') return false;
+    if (typeof str !== 'string') {
+        return false;
+    }
     // Run through DOMPurify — if output differs from input, it was dirty
     const cleaned = DOMPurify.sanitize(str, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
     return cleaned !== str;
@@ -93,5 +101,5 @@ export default {
     sanitizeUserInput,
     sanitizeAIOutput,
     escapeHtml,
-    isSuspicious
+    isSuspicious,
 };

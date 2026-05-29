@@ -4,16 +4,33 @@
 // No fetch(), no localStorage, no app logic.
 
 const WEEKDAY_MAP = {
-    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
-    thursday: 4, friday: 5, saturday: 6
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
 };
 
 // Regex: matches full day names + today/tomorrow (word-boundary, case-insensitive)
 const DAY_REGEX = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi;
 
-const MONTH_NAMES  = ['January','February','March','April','May','June',
-                      'July','August','September','October','November','December'];
-const DAY_HEADERS  = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+];
+const DAY_HEADERS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 let activeTooltip = null;
 
@@ -26,11 +43,15 @@ let activeTooltip = null;
  */
 export function wrapDayRefs(el) {
     // Work on the text content via a temporary walk
-    el.childNodes.forEach(node => {
-        if (node.nodeType !== Node.TEXT_NODE) return;
+    el.childNodes.forEach((node) => {
+        if (node.nodeType !== Node.TEXT_NODE) {
+            return;
+        }
 
         const text = node.textContent;
-        if (!DAY_REGEX.test(text)) return;
+        if (!DAY_REGEX.test(text)) {
+            return;
+        }
 
         DAY_REGEX.lastIndex = 0; // reset after .test()
 
@@ -74,10 +95,12 @@ export function wrapDayRefs(el) {
  * @param {HTMLElement} el  - The badge element to make hoverable
  */
 export function attachCalendarToBadge(el) {
-    const text  = el.textContent || '';
+    const text = el.textContent || '';
     const regex = /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
     const match = text.match(regex);
-    if (!match) return;
+    if (!match) {
+        return;
+    }
 
     el.dataset.day = match[0].toLowerCase();
     el.classList.add('cal-badge-hoverable');
@@ -87,9 +110,9 @@ export function attachCalendarToBadge(el) {
 
 // ─── Event handlers ───────────────────────────────────────────────────────────
 function onDayHover(e) {
-    const span     = e.currentTarget;
-    const dayName  = span.dataset.day;
-    const date     = resolveDayToDate(dayName);
+    const span = e.currentTarget;
+    const dayName = span.dataset.day;
+    const date = resolveDayToDate(dayName);
 
     hideTooltip();
     showTooltip(span, date);
@@ -116,12 +139,16 @@ function resolveDayToDate(dayName) {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    if (dayName === 'today')    return now;
-    if (dayName === 'tomorrow') return new Date(now.getTime() + 86_400_000);
+    if (dayName === 'today') {
+        return now;
+    }
+    if (dayName === 'tomorrow') {
+        return new Date(now.getTime() + 86_400_000);
+    }
 
-    const target  = WEEKDAY_MAP[dayName];
+    const target = WEEKDAY_MAP[dayName];
     const current = now.getDay();
-    const diff    = (target - current + 7) % 7;
+    const diff = (target - current + 7) % 7;
 
     // If today is the same weekday, show next week (it's a future deadline)
     const daysAhead = diff === 0 ? 7 : diff;
@@ -136,18 +163,20 @@ function showTooltip(anchor, date) {
 
     // Position: above the anchor, centred
     const rect = anchor.getBoundingClientRect();
-    const tw   = tooltip.offsetWidth;
-    const th   = tooltip.offsetHeight;
+    const tw = tooltip.offsetWidth;
+    const th = tooltip.offsetHeight;
 
     let left = rect.left + window.scrollX + rect.width / 2 - tw / 2;
-    let top  = rect.top  + window.scrollY - th - 10;
+    let top = rect.top + window.scrollY - th - 10;
 
     // Clamp to viewport
     left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-    if (top < window.scrollY + 8) top = rect.bottom + window.scrollY + 10;
+    if (top < window.scrollY + 8) {
+        top = rect.bottom + window.scrollY + 10;
+    }
 
     tooltip.style.left = `${left}px`;
-    tooltip.style.top  = `${top}px`;
+    tooltip.style.top = `${top}px`;
 
     // Keep alive while hovering the tooltip itself
     tooltip.addEventListener('mouseleave', () => {
@@ -160,7 +189,9 @@ function showTooltip(anchor, date) {
 
 // ─── Tooltip: hide ────────────────────────────────────────────────────────────
 function hideTooltip() {
-    if (!activeTooltip) return;
+    if (!activeTooltip) {
+        return;
+    }
     activeTooltip.remove();
     activeTooltip = null;
 }
@@ -182,7 +213,9 @@ function buildTooltip(date) {
     const dateLabel = document.createElement('span');
     dateLabel.className = 'cal-date-label';
     dateLabel.textContent = date.toLocaleDateString('en-US', {
-        weekday: 'short', day: 'numeric', month: 'short'
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
     });
 
     header.appendChild(monthLabel);
@@ -192,7 +225,7 @@ function buildTooltip(date) {
     // ── Day-of-week row ───────────────────────────────────────────────────────
     const dayRow = document.createElement('div');
     dayRow.className = 'cal-day-headers';
-    DAY_HEADERS.forEach(d => {
+    DAY_HEADERS.forEach((d) => {
         const cell = document.createElement('span');
         cell.textContent = d;
         dayRow.appendChild(cell);
@@ -203,14 +236,15 @@ function buildTooltip(date) {
     const grid = document.createElement('div');
     grid.className = 'cal-grid';
 
-    const year  = date.getFullYear();
+    const year = date.getFullYear();
     const month = date.getMonth();
     const highlightDay = date.getDate();
 
     // First day of the month & total days
-    const firstDow   = new Date(year, month, 1).getDay();  // 0=Sun
-    const daysInMonth= new Date(year, month + 1, 0).getDate();
-    const today      = new Date(); today.setHours(0,0,0,0);
+    const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     // Leading empty cells
     for (let i = 0; i < firstDow; i++) {
@@ -219,13 +253,17 @@ function buildTooltip(date) {
 
     // Day cells
     for (let d = 1; d <= daysInMonth; d++) {
-        const cell  = document.createElement('span');
+        const cell = document.createElement('span');
         cell.className = 'cal-cell';
         cell.textContent = d;
 
         const cellDate = new Date(year, month, d);
-        if (cellDate.getTime() === today.getTime()) cell.classList.add('cal-today');
-        if (d === highlightDay)                     cell.classList.add('cal-highlight');
+        if (cellDate.getTime() === today.getTime()) {
+            cell.classList.add('cal-today');
+        }
+        if (d === highlightDay) {
+            cell.classList.add('cal-highlight');
+        }
 
         grid.appendChild(cell);
     }

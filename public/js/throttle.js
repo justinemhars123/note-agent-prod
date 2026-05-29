@@ -88,18 +88,16 @@ export function createRateLimiter(maxCalls = 5, windowMs = 60000) {
                 calls.shift();
             }
 
-            const nextAvailableTime = calls.length >= maxCalls
-                ? calls[0] + windowMs
-                : now;
+            const nextAvailableTime = calls.length >= maxCalls ? calls[0] + windowMs : now;
 
             return {
                 remainingCalls: Math.max(0, maxCalls - calls.length),
                 totalCalls: calls.length,
                 nextAvailableTime,
                 windowMs,
-                maxCalls
+                maxCalls,
             };
-        }
+        },
     };
 }
 
@@ -121,7 +119,9 @@ export function debounceWithFeedback(fn, element, delayMs = 500, disabledText = 
         // Disable the button
         if (element) {
             element.disabled = true;
-            if (disabledText) element.textContent = disabledText;
+            if (disabledText) {
+                element.textContent = disabledText;
+            }
         }
 
         clearTimeout(timeoutId);
@@ -133,7 +133,9 @@ export function debounceWithFeedback(fn, element, delayMs = 500, disabledText = 
                 // Re-enable the button
                 if (element) {
                     element.disabled = false;
-                    if (originalText) element.textContent = originalText;
+                    if (originalText) {
+                        element.textContent = originalText;
+                    }
                 }
             }
         }, delayMs);
@@ -166,7 +168,7 @@ export function createCooldown(cooldownMs = 1000) {
             const now = Date.now();
             const remaining = cooldownMs - (now - lastExecutionTime);
             return Math.max(0, remaining);
-        }
+        },
     };
 }
 
@@ -175,5 +177,5 @@ export default {
     throttle,
     createRateLimiter,
     debounceWithFeedback,
-    createCooldown
+    createCooldown,
 };

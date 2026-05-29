@@ -3,8 +3,8 @@
 // No fetch(). No localStorage. Pure UI rendering.
 
 import { wrapDayRefs, attachCalendarToBadge } from './calendar.js';
-import { enableDragSort }                      from './drag.js';
-import { sanitizeText, sanitizeAIOutput }      from './sanitize.js';
+import { enableDragSort } from './drag.js';
+import { sanitizeText, sanitizeAIOutput } from './sanitize.js';
 
 // ─── Completion state (kept in-memory, persisted by storage.js) ───────────────
 let onTaskToggle = null; // set by app.js via setTaskToggleHandler()
@@ -55,10 +55,13 @@ export function renderTodoList(text, container, completedTasks = new Set(), mode
 
 // ─── Default mode ─────────────────────────────────────────────────────────────
 function renderDefaultMode(text, container, completedTasks) {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const lines = text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
 
-    const hasStructure = lines.some(l =>
-        l.startsWith('🔴') || l.startsWith('🟡') || l.startsWith('🟢')
+    const hasStructure = lines.some(
+        (l) => l.startsWith('🔴') || l.startsWith('🟡') || l.startsWith('🟢')
     );
 
     if (!hasStructure) {
@@ -68,11 +71,13 @@ function renderDefaultMode(text, container, completedTasks) {
 
     let currentGroup = null;
 
-    lines.forEach(line => {
+    lines.forEach((line) => {
         if (line.startsWith('🔴') || line.startsWith('🟡') || line.startsWith('🟢')) {
-            const catClass = line.startsWith('🔴') ? 'cat-urgent'
-                           : line.startsWith('🟡') ? 'cat-week'
-                           : 'cat-anytime';
+            const catClass = line.startsWith('🔴')
+                ? 'cat-urgent'
+                : line.startsWith('🟡')
+                  ? 'cat-week'
+                  : 'cat-anytime';
 
             currentGroup = document.createElement('div');
             currentGroup.className = `todo-category ${catClass}`;
@@ -82,7 +87,6 @@ function renderDefaultMode(text, container, completedTasks) {
             header.textContent = line;
             currentGroup.appendChild(header);
             container.appendChild(currentGroup);
-
         } else if (line.startsWith('-') && currentGroup) {
             currentGroup.appendChild(makeTaskItem(line, completedTasks));
         }
@@ -94,27 +98,36 @@ function renderDefaultMode(text, container, completedTasks) {
 
 // ─── Simple list mode ─────────────────────────────────────────────────────────
 function renderSimpleMode(text, container, completedTasks) {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    const list  = document.createElement('div');
+    const lines = text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+    const list = document.createElement('div');
     list.className = 'simple-list cat-anytime';
 
-    lines.forEach(line => {
+    lines.forEach((line) => {
         if (/^\d+\./.test(line)) {
             // "1. [8] Task text (timing)"
             list.appendChild(makeTaskItem('- ' + line.replace(/^\d+\.\s*/, ''), completedTasks));
         }
     });
 
-    if (list.children.length === 0) container.appendChild(makePlain(text));
-    else container.appendChild(list);
+    if (list.children.length === 0) {
+        container.appendChild(makePlain(text));
+    } else {
+        container.appendChild(list);
+    }
 }
 
 // ─── Meeting mode ─────────────────────────────────────────────────────────────
 function renderMeetingMode(text, container, completedTasks) {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    let group   = null;
+    const lines = text
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+    let group = null;
 
-    lines.forEach(line => {
+    lines.forEach((line) => {
         if (line.startsWith('📋')) {
             group = document.createElement('div');
             group.className = 'todo-category cat-week';
@@ -128,7 +141,9 @@ function renderMeetingMode(text, container, completedTasks) {
         }
     });
 
-    if (!group) container.appendChild(makePlain(text));
+    if (!group) {
+        container.appendChild(makePlain(text));
+    }
 }
 
 // ─── Email mode ───────────────────────────────────────────────────────────────
@@ -137,7 +152,7 @@ function renderEmailMode(text, container) {
     box.className = 'email-output';
 
     const lines = text.split('\n');
-    lines.forEach(line => {
+    lines.forEach((line) => {
         const p = document.createElement('p');
         if (line.startsWith('Subject:')) {
             p.className = 'email-subject';
@@ -145,8 +160,9 @@ function renderEmailMode(text, container) {
             p.className = 'email-bullet';
         }
         p.textContent = line;
-        if (line.trim()) box.appendChild(p);
-        else {
+        if (line.trim()) {
+            box.appendChild(p);
+        } else {
             const br = document.createElement('div');
             br.className = 'email-spacer';
             box.appendChild(br);
@@ -171,25 +187,26 @@ function makeTaskItem(rawLine, completedTasks) {
 
     // Extract priority score [N]
     const scoreMatch = clean.match(/^\[(\d+)\]\s*/);
-    const score      = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
-    const rest       = scoreMatch ? clean.slice(scoreMatch[0].length) : clean;
+    const score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+    const rest = scoreMatch ? clean.slice(scoreMatch[0].length) : clean;
 
     // Extract due date — handle both '→ Due: Friday' and '→ Friday'
     const dueSplit = rest.split(/→\s*(?:Due:\s*)?/i);
-    let taskText   = dueSplit[0].trim();
-    let dueText    = dueSplit[1]?.trim() ?? null;
+    let taskText = dueSplit[0].trim();
+    let dueText = dueSplit[1]?.trim() ?? null;
 
     // Fallback: detect day name embedded inline (e.g. "Call mum on Sunday")
     // Promotes it to a badge so layout is consistent with other tasks.
     if (!dueText) {
-        const DAY_RE   = /\b(on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)\b/i;
+        const DAY_RE =
+            /\b(on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)\b/i;
         const dayMatch = taskText.match(DAY_RE);
         if (dayMatch) {
-            const raw  = dayMatch[2] || dayMatch[0].replace(/^on\s+/i, '');
-            dueText    = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-            taskText   = taskText
-                .replace(dayMatch[0], '')   // remove "on Sunday" or "Sunday"
-                .replace(/\s{2,}/g, ' ')    // collapse double spaces
+            const raw = dayMatch[2] || dayMatch[0].replace(/^on\s+/i, '');
+            dueText = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+            taskText = taskText
+                .replace(dayMatch[0], '') // remove "on Sunday" or "Sunday"
+                .replace(/\s{2,}/g, ' ') // collapse double spaces
                 .replace(/\s+(on|at|by)\s*$/i, '') // strip trailing prepositions
                 .trim();
         }
@@ -209,7 +226,9 @@ function makeTaskItem(rawLine, completedTasks) {
     checkbox.addEventListener('change', () => {
         item.classList.toggle('todo-done', checkbox.checked);
         updateProgressBar(item.closest('.card, .todo-list'));
-        if (onTaskToggle) onTaskToggle(taskText, checkbox.checked);
+        if (onTaskToggle) {
+            onTaskToggle(taskText, checkbox.checked);
+        }
     });
 
     // ── Coloured dot
@@ -245,8 +264,12 @@ function makeTaskItem(rawLine, completedTasks) {
     item.appendChild(checkbox);
     item.appendChild(dot);
     item.appendChild(label);
-    if (dueBadge)   item.appendChild(dueBadge);   // day badge first
-    if (scoreBadge) item.appendChild(scoreBadge);  // priority number far right
+    if (dueBadge) {
+        item.appendChild(dueBadge);
+    } // day badge first
+    if (scoreBadge) {
+        item.appendChild(scoreBadge);
+    } // priority number far right
 
     return item;
 }
@@ -273,39 +296,61 @@ function enableInlineEdit(labelEl) {
         }
 
         labelEl.addEventListener('blur', save, { once: true });
-        labelEl.addEventListener('keydown', e => {
-            if (e.key === 'Enter') { e.preventDefault(); labelEl.blur(); }
-            if (e.key === 'Escape') { labelEl.textContent = current; labelEl.blur(); }
-        }, { once: true });
+        labelEl.addEventListener(
+            'keydown',
+            (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    labelEl.blur();
+                }
+                if (e.key === 'Escape') {
+                    labelEl.textContent = current;
+                    labelEl.blur();
+                }
+            },
+            { once: true }
+        );
     });
 }
 
 // ─── Progress bar ─────────────────────────────────────────────────────────────
-export function updateProgressBar(scope) {
-    const items   = document.querySelectorAll('.todo-item');
-    const done    = document.querySelectorAll('.todo-item.todo-done');
-    const bar     = document.getElementById('progressBar');
-    const label   = document.getElementById('progressLabel');
+export function updateProgressBar(_scope) {
+    const items = document.querySelectorAll('.todo-item');
+    const done = document.querySelectorAll('.todo-item.todo-done');
+    const bar = document.getElementById('progressBar');
+    const label = document.getElementById('progressLabel');
     const section = document.getElementById('progressSection');
 
-    if (!bar || !section) return;
+    if (!bar || !section) {
+        return;
+    }
 
     const total = items.length;
-    if (total === 0) { section.classList.add('hidden'); return; }
+    if (total === 0) {
+        section.classList.add('hidden');
+        return;
+    }
 
     section.classList.remove('hidden');
     const pct = Math.round((done.length / total) * 100);
     bar.style.width = pct + '%';
     label.textContent = `${done.length} / ${total} done`;
 
-    if (pct === 100) bar.classList.add('bar-complete');
-    else             bar.classList.remove('bar-complete');
+    if (pct === 100) {
+        bar.classList.add('bar-complete');
+    } else {
+        bar.classList.remove('bar-complete');
+    }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function getPriorityLevel(score) {
-    if (score >= 8) return 'high';
-    if (score >= 5) return 'mid';
+    if (score >= 8) {
+        return 'high';
+    }
+    if (score >= 5) {
+        return 'mid';
+    }
     return 'low';
 }
 
@@ -318,8 +363,8 @@ function makePlain(text) {
 
 // ─── History rendering ────────────────────────────────────────────────────────
 export function renderHistorySection(historyData, onRestore, onClear) {
-    const section  = document.getElementById('historySection');
-    const list     = document.getElementById('historyList');
+    const section = document.getElementById('historySection');
+    const list = document.getElementById('historyList');
     const clearBtn = document.getElementById('clearHistoryBtn');
     list.innerHTML = '';
 
@@ -329,15 +374,24 @@ export function renderHistorySection(historyData, onRestore, onClear) {
     }
 
     section.classList.remove('hidden');
-    if (clearBtn) clearBtn.onclick = onClear;
+    if (clearBtn) {
+        clearBtn.onclick = onClear;
+    }
 
-    historyData.forEach(entry => {
+    historyData.forEach((entry) => {
+        // Sanitize all server-provided strings before touching the DOM
+        const safeDate = sanitizeText(String(entry.date ?? ''));
+        const safeMode = ['default', 'simple', 'meeting', 'email'].includes(entry.mode)
+            ? entry.mode
+            : 'default';
+
         const details = document.createElement('details');
         details.className = 'history-item';
 
         const summary = document.createElement('summary');
         summary.className = 'history-summary';
-        summary.textContent = `Result from ${entry.date}`;
+        // textContent is safe — but we sanitize the date string anyway for defence-in-depth
+        summary.textContent = `Result from ${safeDate}`;
         details.appendChild(summary);
 
         const body = document.createElement('div');
@@ -345,13 +399,13 @@ export function renderHistorySection(historyData, onRestore, onClear) {
 
         const inner = document.createElement('div');
         inner.className = 'todo-list';
-        renderTodoList(entry.text, inner, new Set(), entry.mode || 'default');
+        renderTodoList(entry.text, inner, new Set(), safeMode);
         body.appendChild(inner);
 
         const restoreBtn = document.createElement('button');
         restoreBtn.className = 'restore-btn';
         restoreBtn.textContent = '↩ Restore this result';
-        restoreBtn.onclick = () => onRestore(entry.text, entry.mode || 'default');
+        restoreBtn.onclick = () => onRestore(entry.text, safeMode);
         body.appendChild(restoreBtn);
 
         details.appendChild(body);

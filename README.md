@@ -1,3 +1,62 @@
+# Note-to-Action Agent
+
+Minimal personal project: converts notes into actionable tasks using AI providers (Groq, OpenAI) and optional Supabase history.
+
+Quick start
+
+1. Copy `.env.example` to `.env` and fill required values.
+
+2. Install dependencies:
+
+```bash
+npm ci
+```
+
+3. Run locally:
+
+```bash
+npm run dev
+# or production
+npm start
+```
+
+Tests and lint
+
+```bash
+npm run lint
+npm test
+```
+
+Docker
+
+Build and run with Docker:
+
+```bash
+docker build -t note-to-action-agent .
+docker run -e GROQ_API_KEY=... -e SUPABASE_URL=... -e SUPABASE_ANON_KEY=... -p 3001:3001 note-to-action-agent
+```
+
+Publish & use the GHCR image
+
+When you push to `main`, the CI will build and publish an image to GitHub Container Registry (GHCR) at `ghcr.io/<owner>/note-to-action-agent`.
+
+To pull the latest image:
+
+```bash
+docker pull ghcr.io/<your-github-username>/note-to-action-agent:latest
+docker run -e GROQ_API_KEY=... -e SUPABASE_URL=... -e SUPABASE_ANON_KEY=... -p 3001:3001 ghcr.io/<your-github-username>/note-to-action-agent:latest
+```
+
+Note: CI uses the repository owner as the GHCR namespace; replace `<your-github-username>` with your account or organization name.
+
+Security notes
+- Never store service_role keys or other full-privilege secrets in the browser or commit them to the repo.
+- Use `SUPABASE_ANON_KEY` for client-side calls; keep `SUPABASE_SERVICE_KEY` only in server-side secrets/stores.
+- Set real secrets using your hosting provider's secret management (Vercel/GH Actions secrets/etc.).
+
+CI
+
+A simple GitHub Action is present at `.github/workflows/ci.yml` which runs lint, tests and an audit on push/PR.
 # Personal Productivity Agent
 
 An AI-powered automation tool that transforms messy notes into structured, actionable to-do lists. Paste anything—meeting reminders, random thoughts, deadlines—and the agent organizes it instantly.
@@ -70,6 +129,82 @@ npm start
 ```
 
 Then open [http://localhost:3001](http://localhost:3001) in your browser.
+
+## 🚀 Deployment & Production Setup
+
+This project includes complete Phase 2 & 3 setup for database automation, CI/CD pipelines, and production deployment.
+
+### Setup Guides
+
+- **[Phase 2 & 3 Complete Setup Guide](./PHASE2-PHASE3-SETUP.md)** ← Start here!
+  - Automate database migrations with Supabase CLI
+  - Configure GitHub CI/CD pipeline
+  - Set up GitHub secrets
+  - Deploy to production
+
+- **[Railway.app Deployment Guide](./DEPLOYMENT-RAILWAY.md)**
+  - Recommended for easiest setup
+  - Auto-deploys on every git push
+  - Includes PostgreSQL database
+
+- **[Render.com Deployment Guide](./DEPLOYMENT-RENDER.md)**
+  - Free tier option available
+  - Alternative to Railway
+  - Manual deploy on free tier
+  
+### Deploying Backend to Render
+
+1. Create a new Web Service on Render and connect your GitHub repository.
+2. Render will use `render.yaml` (included) to configure the service.
+3. Add the following environment variables in Render: `GROQ_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `OPENAI_API_KEY`, `SENTRY_DSN`.
+4. Auto deploy is enabled in `render.yaml`; on push to `main` Render will build and deploy.
+
+### Deploying Frontend to Vercel
+
+1. The `public/` directory contains the static frontend. Import the repo into Vercel.
+2. Vercel will use `vercel.json` to configure the static deployment.
+3. Add the environment variables `SUPABASE_URL` and `SUPABASE_ANON_KEY` in your Vercel project settings.
+4. Deploy — Vercel provides automatic previews on PRs.
+
+
+- **[Implementation Checklist](./IMPLEMENTATION-CHECKLIST.md)**
+  - Step-by-step verification checklist
+  - Success criteria for each phase
+  - Troubleshooting reference
+
+### Quick Deployment
+
+```bash
+# 1. Install Supabase CLI
+npm install -D supabase
+
+# 2. Initialize migrations
+npx supabase init
+
+# 3. Add GitHub secrets
+# Go to: GitHub → Settings → Secrets and Variables → Actions
+# Add: GROQ_API_KEY, SUPABASE_URL, SUPABASE_KEY
+
+# 4. Deploy to Railway or Render
+# Visit: https://railway.app or https://render.com
+# Connect your GitHub repo
+# Done! CI/CD pipeline starts automatically
+
+# 5. Verify production
+# Visit your deployed URL
+# Check HTTPS certificate (lock icon 🔒)
+# Verify security headers in DevTools
+```
+
+### CI/CD Pipeline
+
+GitHub Actions automatically:
+- ✅ Runs tests on every push/PR
+- ✅ Validates database migrations
+- ✅ Runs security scans
+- ✅ Deploys to production (if all checks pass)
+
+See `.github/workflows/ci.yml` for pipeline configuration.
 
 ## Project Structure
 

@@ -1,20 +1,45 @@
 // ─── app.js — Main entry point ────────────────────────────────────────────────
 // Wires all modules together. No rendering, fetch, or storage logic lives here.
 
-import { fetchTodoList }                                        from './api.js';
-import { saveToHistory, loadHistory, clearHistory,
-         saveCompleted, loadCompleted, clearCompleted, getUserId } from './storage.js';
-import { renderTodoList, renderHistorySection,
-         shakeElement, updateProgressBar,
-         setTaskToggleHandler }                                 from './render.js';
-import { initDraft, clearDraft }                               from './draft.js';
-import { toggleVoice, isVoiceSupported }                       from './voice.js';
-import { shareAsLink, getSharedResult, clearShareHash }        from './share.js';
-import { initDueReminders, enableDueReminders,
-         scheduleDueReminders, getReminderPermission }         from './reminders.js';
-import { displayError, clearError }                            from './errorHandler.js';
-import { createCooldown }                                       from './throttle.js';
-import { createSmartRequester }                                 from './dedup.js';
+import { fetchTodoList } from './api.js';
+import {
+    saveToHistory,
+    loadHistory,
+    clearHistory,
+    saveCompleted,
+    loadCompleted,
+    clearCompleted,
+    getUserId,
+} from './storage.js';
+import {
+    initAuth,
+    signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    signOut,
+    getSession,
+    getAuthToken,
+} from './auth.js';
+import { mountGrainient } from './grainient.js';
+import {
+    renderTodoList,
+    renderHistorySection,
+    shakeElement,
+    updateProgressBar,
+    setTaskToggleHandler,
+} from './render.js';
+import { initDraft, clearDraft } from './draft.js';
+import { toggleVoice, isVoiceSupported } from './voice.js';
+import { shareAsLink, getSharedResult, clearShareHash } from './share.js';
+import {
+    initDueReminders,
+    enableDueReminders,
+    scheduleDueReminders,
+    getReminderPermission,
+} from './reminders.js';
+import { displayError, clearError } from './errorHandler.js';
+import { createCooldown } from './throttle.js';
+import { createSmartRequester } from './dedup.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MAX_CHARS = 2000;
@@ -22,7 +47,7 @@ const MAX_CHARS = 2000;
 const SAMPLE_NOTES = {
     1: `Meeting with the team today at 2pm, finish report by Friday, buy groceries, call the doctor to reschedule appointment`,
     2: `Pick up dry cleaning tomorrow morning, pay electricity bill before the 30th, call mum on Sunday, renew car insurance this week, tidy the garage whenever I get a chance`,
-    3: `Sprint planning session at 9am today, deploy the auth fix to staging by Wednesday, write unit tests for the payment module before Friday's release, update README docs anytime, code review for Sarah's PR today`
+    3: `Sprint planning session at 9am today, deploy the auth fix to staging by Wednesday, write unit tests for the payment module before Friday's release, update README docs anytime, code review for Sarah's PR today`,
 };
 
 const TYPING_MESSAGES = [
@@ -30,19 +55,19 @@ const TYPING_MESSAGES = [
     'Extracting tasks…',
     'Identifying deadlines…',
     'Organising by priority…',
-    'Almost done…'
+    'Almost done…',
 ];
 
 // ─── State ────────────────────────────────────────────────────────────────────
-let typingInterval  = null;
-let completedTasks  = new Set();
-let currentMode     = 'default';
-let currentResult   = '';
-let submitCooldown  = createCooldown(1000); // Prevent spam: 1 request per second max
-let requester       = createSmartRequester(5 * 60 * 1000); // 5-minute cache for identical requests
+let typingInterval = null;
+let completedTasks = new Set();
+let currentMode = 'default';
+let currentResult = '';
+const submitCooldown = createCooldown(1000); // Prevent spam: 1 request per second max
+const requester = createSmartRequester(5 * 60 * 1000); // 5-minute cache for identical requests
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -58,19 +83,172 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-save draft
     initDraft($('notes'), updateCounter);
 
+    // Mount Grainient WebGL background
+    const bgEl = document.getElementById('grainientBg');
+    if (bgEl) {
+        mountGrainient(bgEl, {
+            color1: '#3d2b7a', // muted deep purple
+            color2: '#05020f', // near-black
+            color3: '#1a0e3d', // very dark navy
+            timeSpeed: 0.12,
+            warpStrength: 0.6,
+            warpFrequency: 3.5,
+            warpSpeed: 1.2,
+            warpAmplitude: 80.0,
+            rotationAmount: 300.0,
+            noiseScale: 2.0,
+            grainAmount: 0.04,
+            contrast: 1.0,
+            saturation: 0.85,
+            zoom: 0.9,
+        });
+    }
+
+    // Initialize Auth
+    initAuth().then(() => {
+        updateAuthUI(getSession());
+    });
+
+    window.addEventListener('auth-changed', (e) => {
+        updateAuthUI(e.detail.session);
+        if (e.detail.session) {
+            refreshHistory(); // Refresh history when logged in
+            $('authModal').classList.add('hidden');
+        }
+    });
+
+    // User profile dropdown toggle
+    const profileTrigger = $('profileTrigger');
+    const profileDropdown = $('profileDropdown');
+
+    profileTrigger?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileDropdown?.classList.toggle('active');
+        $('userProfile')?.classList.toggle('active');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#userProfile')) {
+            profileDropdown?.classList.remove('active');
+            $('userProfile')?.classList.remove('active');
+        }
+    });
+
+    // Dropdown Action Event Delegation
+    profileDropdown?.addEventListener('click', async (e) => {
+        const btnId = e.target.id;
+        if (!btnId) {
+            return;
+        }
+
+        profileDropdown.classList.remove('active');
+        $('userProfile')?.classList.remove('active');
+
+        if (btnId === 'historyBtn') {
+            $('historySidebar').classList.remove('hidden');
+            $('sidebarOverlay').classList.remove('hidden');
+        } else if (btnId === 'signInBtn') {
+            $('authModal').classList.remove('hidden');
+        } else if (btnId === 'switchAccountBtn') {
+            await signOut();
+            $('authModal').classList.remove('hidden');
+        } else if (btnId === 'signOutBtn') {
+            await signOut();
+            refreshHistory(); // refresh as anonymous user
+        }
+    });
+
+    $('closeSidebarBtn')?.addEventListener('click', () => {
+        $('historySidebar').classList.add('hidden');
+        $('sidebarOverlay').classList.add('hidden');
+    });
+
+    $('sidebarOverlay')?.addEventListener('click', () => {
+        $('historySidebar').classList.add('hidden');
+        $('sidebarOverlay').classList.add('hidden');
+        $('authModal').classList.add('hidden');
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            $('historySidebar')?.classList.add('hidden');
+            $('sidebarOverlay')?.classList.add('hidden');
+            $('authModal')?.classList.add('hidden');
+        }
+    });
+
+    // Auth Modal DOM Events
+    $('authBtn')?.addEventListener('click', () => $('authModal').classList.remove('hidden'));
+    $('authCloseBtn')?.addEventListener('click', () => {
+        $('authModal').classList.add('hidden');
+        if ($('authError')) {
+            $('authError').classList.add('hidden');
+        }
+    });
+
+    $('googleSignInBtn')?.addEventListener('click', async () => {
+        const btn = $('googleSignInBtn');
+        btn.classList.add('loading');
+        btn.textContent = 'Redirecting…';
+        const { error } = await signInWithGoogle();
+        if (error) {
+            btn.classList.remove('loading');
+            btn.innerHTML =
+                '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google"> Continue with Google';
+            displayAuthError(error.message);
+        }
+        // On success the page redirects — no need to reset the button
+    });
+
+    $('emailAuthForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = $('signInEmailBtn');
+        const email = $('authEmail').value;
+        const password = $('authPassword').value;
+        btn.classList.add('loading');
+        const { error } = await signInWithEmail(email, password);
+        btn.classList.remove('loading');
+        if (error) {
+            displayAuthError(error.message);
+        }
+    });
+
+    $('signUpEmailBtn')?.addEventListener('click', async () => {
+        if (!$('emailAuthForm').checkValidity()) {
+            $('emailAuthForm').reportValidity();
+            return;
+        }
+        const btn = $('signUpEmailBtn');
+        const email = $('authEmail').value;
+        const password = $('authPassword').value;
+        btn.classList.add('loading');
+        const { error } = await signUpWithEmail(email, password);
+        btn.classList.remove('loading');
+        if (error) {
+            displayAuthError(error.message);
+        } else {
+            displayAuthError('Check your email for the confirmation link!', true);
+        }
+    });
+
     // Dark / light mode preference
     applyTheme(localStorage.getItem('noteagent_theme') || 'dark');
 
     // Keyboard shortcut label (Mac vs others)
     if (navigator.platform.toUpperCase().includes('MAC')) {
         const hint = $('shortcutHint');
-        if (hint) hint.textContent = '⌘ Enter';
+        if (hint) {
+            hint.textContent = '⌘ Enter';
+        }
     }
 
     // Hide mic button if voice not supported
     if (!isVoiceSupported()) {
         const micBtn = $('micBtn');
-        if (micBtn) micBtn.style.display = 'none';
+        if (micBtn) {
+            micBtn.style.display = 'none';
+        }
     }
 
     updateCounter();
@@ -105,13 +283,13 @@ document.addEventListener('DOMContentLoaded', () => {
     $('notes')?.addEventListener('input', updateCounter);
 
     // Mode selector buttons
-    document.querySelectorAll('.mode-btn').forEach(btn => {
+    document.querySelectorAll('.mode-btn').forEach((btn) => {
         btn.addEventListener('click', () => setMode(btn.dataset.mode));
     });
 });
 
 // ─── Keyboard shortcut: Ctrl/Cmd + Enter ──────────────────────────────────────
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         processNotes();
@@ -120,30 +298,97 @@ document.addEventListener('keydown', e => {
 
 // ─── PWA service worker registration ─────────────────────────────────────────
 function disablePWA() {
-    if (!('serviceWorker' in navigator)) return;
+    if (!('serviceWorker' in navigator)) {
+        return;
+    }
 
-    navigator.serviceWorker.getRegistrations()
-        .then(registrations => Promise.all(registrations.map(registration => registration.unregister())))
+    navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) =>
+            Promise.all(registrations.map((registration) => registration.unregister()))
+        )
         .then(() => {
-            if (!('caches' in window)) return;
-            return caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
+            if (!('caches' in window)) {
+                return;
+            }
+            return caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))));
         })
         .then(() => console.log('PWA disabled and old caches cleared'))
-        .catch(error => console.warn('PWA cleanup failed:', error));
+        .catch((error) => console.warn('PWA cleanup failed:', error));
 }
 
 // ─── Dark / Light mode ────────────────────────────────────────────────────────
 function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
     const btn = $('themeBtn');
-    if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    if (btn) {
+        btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
 }
 
 function toggleTheme() {
     const current = document.documentElement.dataset.theme || 'dark';
-    const next    = current === 'dark' ? 'light' : 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
     localStorage.setItem('noteagent_theme', next);
     applyTheme(next);
+}
+
+// ─── Auth Helpers ─────────────────────────────────────────────────────────────
+function updateAuthUI(session) {
+    const authBtn = $('authBtn');
+    const historyIcon = $('historyToggleBtn');
+    const userProfile = $('userProfile');
+    const userEmail = $('userEmail');
+    const profileDropdown = $('profileDropdown');
+
+    if (session && session.user) {
+        // ── Logged in: hide Sign In button + 🕒 icon, show profile dropdown
+        if (authBtn) {
+            authBtn.style.display = 'none';
+        }
+        if (historyIcon) {
+            historyIcon.style.display = 'none';
+        }
+        if (userProfile) {
+            userProfile.classList.remove('hidden');
+        }
+        if (userEmail) {
+            userEmail.textContent = session.user.email;
+        }
+        if (profileDropdown) {
+            profileDropdown.innerHTML = `
+                <button class="dropdown-item" id="historyBtn">History</button>
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item" id="switchAccountBtn">Switch Account</button>
+                <button class="dropdown-item dropdown-item--danger" id="signOutBtn">Sign Out</button>
+            `;
+        }
+    } else {
+        // ── Logged out: show Sign In button + 🕒 icon, hide profile dropdown
+        if (authBtn) {
+            authBtn.style.display = '';
+        }
+        if (historyIcon) {
+            historyIcon.style.display = '';
+        }
+        if (userProfile) {
+            userProfile.classList.add('hidden');
+        }
+        if (userEmail) {
+            userEmail.textContent = '';
+        }
+    }
+}
+
+function displayAuthError(msg, isSuccess = false) {
+    const errBox = $('authError');
+    if (!errBox) {
+        return;
+    }
+    errBox.textContent = msg;
+    errBox.style.color = isSuccess ? '#2ecc71' : '#e74c3c';
+    errBox.style.backgroundColor = isSuccess ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)';
+    errBox.classList.remove('hidden');
 }
 
 // ─── Sample inputs ────────────────────────────────────────────────────────────
@@ -154,21 +399,28 @@ function loadSample(n) {
     updateCounter();
     initDraft(textarea, updateCounter); // re-init to pick up new value
     textarea.style.borderColor = 'var(--clr-primary)';
-    setTimeout(() => { textarea.style.borderColor = ''; }, 600);
+    setTimeout(() => {
+        textarea.style.borderColor = '';
+    }, 600);
 }
 
 // ─── #5: Character counter ────────────────────────────────────────────────────
 function updateCounter() {
     const textarea = $('notes');
-    const counter  = document.querySelector('.char-counter');
-    const countEl  = $('charCount');
-    if (!textarea || !counter || !countEl) return;
+    const counter = document.querySelector('.char-counter');
+    const countEl = $('charCount');
+    if (!textarea || !counter || !countEl) {
+        return;
+    }
 
     const len = textarea.value.length;
     countEl.textContent = len.toLocaleString();
     counter.classList.remove('warn', 'limit');
-    if      (len >= MAX_CHARS)          counter.classList.add('limit');
-    else if (len >= MAX_CHARS * 0.8)    counter.classList.add('warn');
+    if (len >= MAX_CHARS) {
+        counter.classList.add('limit');
+    } else if (len >= MAX_CHARS * 0.8) {
+        counter.classList.add('warn');
+    }
 }
 
 // ─── #7: Clear ───────────────────────────────────────────────────────────────
@@ -188,13 +440,17 @@ function clearAll() {
 // ─── #9: Voice input ─────────────────────────────────────────────────────────
 function toggleVoiceInput() {
     const btn = $('micBtn');
+    if (!isVoiceSupported()) {
+        showToast('Voice input is not supported in your browser. Try Chrome or Edge.', 'error');
+        return;
+    }
     toggleVoice($('notes'), btn, updateCounter);
 }
 
 // ─── Output mode selector ────────────────────────────────────────────────────
 function setMode(mode) {
     currentMode = mode;
-    document.querySelectorAll('.mode-btn').forEach(b => {
+    document.querySelectorAll('.mode-btn').forEach((b) => {
         b.classList.toggle('mode-active', b.dataset.mode === mode);
     });
 }
@@ -209,7 +465,10 @@ function startTypingAnimation() {
     typingInterval = setInterval(() => {
         i = (i + 1) % TYPING_MESSAGES.length;
         msgEl.style.opacity = '0';
-        setTimeout(() => { msgEl.textContent = TYPING_MESSAGES[i]; msgEl.style.opacity = '1'; }, 200);
+        setTimeout(() => {
+            msgEl.textContent = TYPING_MESSAGES[i];
+            msgEl.style.opacity = '1';
+        }, 200);
     }, 2000);
 }
 
@@ -222,25 +481,27 @@ function stopTypingAnimation() {
 // ─── Custom prompt panel ──────────────────────────────────────────────────────
 function toggleAdvanced() {
     const panel = $('advancedPanel');
-    const btn   = $('advancedToggle');
-    const open  = panel.classList.toggle('hidden');
+    const btn = $('advancedToggle');
+    const open = panel.classList.toggle('hidden');
     btn.textContent = open ? '⚙️ Advanced' : '⚙️ Advanced ▲';
 }
 
 // ─── Main: processNotes ───────────────────────────────────────────────────────
 async function processNotes() {
-    const notes        = $('notes').value.trim();
+    const notes = $('notes').value.trim();
     const customPrompt = $('customPromptInput')?.value.trim() || '';
 
-    if (!notes) { shakeElement($('notes')); return; }
+    if (!notes) {
+        shakeElement($('notes'));
+        return;
+    }
 
     // Rate limiting: prevent spam submissions
     if (!submitCooldown.check()) {
         const remainingMs = submitCooldown.getRemainingMs();
         const remainingSecs = Math.ceil(remainingMs / 1000);
         shakeElement($('submitBtn'));
-        displayError($('errorBox'), 
-            `Please wait ${remainingSecs}s before submitting again`);
+        displayError($('errorBox'), `Please wait ${remainingSecs}s before submitting again`);
         return;
     }
 
@@ -251,15 +512,14 @@ async function processNotes() {
 
     try {
         clearError($('errorBox'));
-        
+
         // Create a unique key for deduplication/caching
         // Same notes + mode + custom prompt = same request
         const requestKey = JSON.stringify({ notes, currentMode, customPrompt });
-        
+
         // Use smart requester to deduplicate and cache
-        const { result, mode } = await requester.execute(
-            requestKey,
-            () => fetchTodoList(notes, currentMode, customPrompt, getUserId())
+        const { result, mode } = await requester.execute(requestKey, () =>
+            fetchTodoList(notes, currentMode, customPrompt, getUserId())
         );
         currentResult = result;
 
@@ -269,7 +529,9 @@ async function processNotes() {
         renderTodoList(result, $('todoList'), completedTasks, mode || currentMode);
         updateProgressBar();
         const scheduledCount = scheduleDueReminders(result);
-        if (scheduledCount > 0) flashBtn($('reminderBtn'), 'Reminder set', 'Remind');
+        if (scheduledCount > 0) {
+            flashBtn($('reminderBtn'), 'Reminder set', 'Remind');
+        }
         updateReminderButton();
 
         $('result').classList.remove('hidden');
@@ -277,7 +539,6 @@ async function processNotes() {
 
         saveToHistory(result, currentMode);
         refreshHistory();
-
     } catch (err) {
         // Show enhanced error with recovery options
         displayError($('errorBox'), err, () => {
@@ -293,21 +554,25 @@ async function processNotes() {
 // ─── #6: Copy ────────────────────────────────────────────────────────────────
 async function copyResult() {
     const copyBtn = $('copyBtn');
-    const text    = $('todoList').innerText || $('todoList').textContent;
+    const text = $('todoList').innerText || $('todoList').textContent;
     try {
         await navigator.clipboard.writeText(text);
         copyBtn.innerHTML = '✅ Copied!';
     } catch {
         copyBtn.innerHTML = '❌ Failed';
     }
-    setTimeout(() => { copyBtn.innerHTML = '📋 Copy'; }, 2000);
+    setTimeout(() => {
+        copyBtn.innerHTML = '📋 Copy';
+    }, 2000);
 }
 
 // ─── #9: Export .md ──────────────────────────────────────────────────────────
 function exportResult() {
     const text = ($('todoList').innerText || $('todoList').textContent).trim();
-    if (!text) return;
-    const date    = new Date().toISOString().slice(0, 10);
+    if (!text) {
+        return;
+    }
+    const date = new Date().toISOString().slice(0, 10);
     const content = `# My To-Do List\n*Generated by NoteAgent on ${date}*\n\n${text}`;
     downloadFile(`todo-${date}.md`, content, 'text/markdown');
     flashBtn($('exportBtn'), '✅ Saved!', '⬇️ Export');
@@ -315,36 +580,49 @@ function exportResult() {
 
 // ─── Export .ics (calendar) ──────────────────────────────────────────────────
 function exportICS() {
-    if (!currentResult) return;
-    const lines   = currentResult.split('\n').map(l => l.trim()).filter(Boolean);
-    const events  = [];
-    const today   = new Date();
+    if (!currentResult) {
+        return;
+    }
+    const lines = currentResult
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+    const events = [];
+    const today = new Date();
 
-    lines.forEach(line => {
-        if (!line.startsWith('-')) return;
-        const clean    = line.replace(/^[-•]\s*/, '').replace(/^\[\d+\]\s*/, '');
+    lines.forEach((line) => {
+        if (!line.startsWith('-')) {
+            return;
+        }
+        const clean = line.replace(/^[-•]\s*/, '').replace(/^\[\d+\]\s*/, '');
         // Handle both '→ Due: Friday' and '→ Friday'
         const dueSplit = clean.split(/→\s*(?:Due:\s*)?/i);
-        const title    = dueSplit[0].trim();
-        const dueStr   = dueSplit[1]?.trim();
+        const title = dueSplit[0].trim();
+        const dueStr = dueSplit[1]?.trim();
 
-        if (!dueStr) return; // skip tasks with no due date
+        if (!dueStr) {
+            return;
+        } // skip tasks with no due date
 
         const dueDate = parseDueDate(dueStr, today);
-        if (!dueDate) return;
+        if (!dueDate) {
+            return;
+        }
 
-        const stamp   = formatICSDate(dueDate);
-        const uid     = `noteagent-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const stamp = formatICSDate(dueDate);
+        const uid = `noteagent-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-        events.push([
-            'BEGIN:VEVENT',
-            `UID:${uid}`,
-            `DTSTAMP:${formatICSDate(today)}`,
-            `DTSTART;VALUE=DATE:${stamp.slice(0,8)}`,
-            `DTEND;VALUE=DATE:${stamp.slice(0,8)}`,
-            `SUMMARY:${title}`,
-            'END:VEVENT'
-        ].join('\r\n'));
+        events.push(
+            [
+                'BEGIN:VEVENT',
+                `UID:${uid}`,
+                `DTSTAMP:${formatICSDate(today)}`,
+                `DTSTART;VALUE=DATE:${stamp.slice(0, 8)}`,
+                `DTEND;VALUE=DATE:${stamp.slice(0, 8)}`,
+                `SUMMARY:${title}`,
+                'END:VEVENT',
+            ].join('\r\n')
+        );
     });
 
     if (events.length === 0) {
@@ -358,10 +636,10 @@ function exportICS() {
         'PRODID:-//NoteAgent//EN',
         'CALSCALE:GREGORIAN',
         ...events,
-        'END:VCALENDAR'
+        'END:VCALENDAR',
     ].join('\r\n');
 
-    downloadFile(`noteagent-${new Date().toISOString().slice(0,10)}.ics`, ics, 'text/calendar');
+    downloadFile(`noteagent-${new Date().toISOString().slice(0, 10)}.ics`, ics, 'text/calendar');
     flashBtn($('icsBtn'), '✅ Saved!', '📅 .ics');
 }
 
@@ -394,16 +672,28 @@ function renderSharedResult(text) {
 
 // ─── #8: History ─────────────────────────────────────────────────────────────
 async function refreshHistory() {
-    let history = [];
+    let history;
     try {
         const userId = getUserId();
-        const res = await fetch(`/history?userId=${userId}`);
+        const headers = {};
+        const token = getAuthToken();
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        const list = $('historyList');
+        if (list) {
+            list.innerHTML = `<div class="sidebar-loader"><div class="spinner"></div><span>Loading history...</span></div>`;
+        }
+        const res = await fetch(`/history?userId=${userId}`, { headers });
         const data = await res.json();
         if (res.ok && data.notes) {
-            history = data.notes.map(n => ({
+            history = data.notes.map((n) => ({
                 text: n.ai_result,
                 mode: n.mode,
-                date: new Date(n.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+                date: new Date(n.created_at).toLocaleString('en-US', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                }),
             }));
         } else {
             history = loadHistory();
@@ -417,7 +707,7 @@ async function refreshHistory() {
         history,
         (text, mode) => {
             currentResult = text;
-            currentMode   = mode || 'default';
+            currentMode = mode || 'default';
             completedTasks = loadCompleted();
             renderTodoList(text, $('todoList'), completedTasks, currentMode);
             updateProgressBar();
@@ -425,14 +715,23 @@ async function refreshHistory() {
             updateReminderButton();
             $('result').classList.remove('hidden');
             $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            // Auto-close sidebar
+            $('historySidebar')?.classList.add('hidden');
+            $('sidebarOverlay')?.classList.add('hidden');
         },
-        () => { clearHistory(); refreshHistory(); }
+        () => {
+            clearHistory();
+            refreshHistory();
+        }
     );
 }
 
 // Browser due-date reminders
 async function enableReminders() {
-    if (!currentResult) return;
+    if (!currentResult) {
+        return;
+    }
 
     const btn = $('reminderBtn');
     const { status, count } = await enableDueReminders(currentResult);
@@ -450,31 +749,50 @@ async function enableReminders() {
 
 function updateReminderButton() {
     const btn = $('reminderBtn');
-    if (!btn) return;
+    if (!btn) {
+        return;
+    }
 
     const permission = getReminderPermission();
     btn.disabled = permission === 'unsupported';
-    btn.title = permission === 'granted'
-        ? 'Schedule browser reminders for due dates'
-        : 'Enable browser notifications for due-date reminders';
+    btn.title =
+        permission === 'granted'
+            ? 'Schedule browser reminders for due dates'
+            : 'Enable browser notifications for due-date reminders';
 }
 
 // ─── ICS helpers ──────────────────────────────────────────────────────────────
 function parseDueDate(str, today) {
-    const dayMap = { sunday:0, monday:1, tuesday:2, wednesday:3, thursday:4, friday:5, saturday:6 };
+    const dayMap = {
+        sunday: 0,
+        monday: 1,
+        tuesday: 2,
+        wednesday: 3,
+        thursday: 4,
+        friday: 5,
+        saturday: 6,
+    };
 
     // Normalize: strip leading "by " or "on " (AI sometimes outputs these)
-    let lower = str.toLowerCase().trim().replace(/^(by|on)\s+/, '');
+    const lower = str
+        .toLowerCase()
+        .trim()
+        .replace(/^(by|on)\s+/, '');
 
-    if (lower === 'today')    return new Date(today);
-    if (lower === 'tomorrow') return new Date(today.getTime() + 86_400_000);
+    if (lower === 'today') {
+        return new Date(today);
+    }
+    if (lower === 'tomorrow') {
+        return new Date(today.getTime() + 86_400_000);
+    }
 
     // Full or partial day name match (e.g. "friday", "this friday")
     const dayMatch = lower.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
     if (dayMatch) {
         const target = dayMap[dayMatch[1]];
-        const base   = new Date(today); base.setHours(0,0,0,0);
-        const diff   = (target - base.getDay() + 7) % 7;
+        const base = new Date(today);
+        base.setHours(0, 0, 0, 0);
+        const diff = (target - base.getDay() + 7) % 7;
         return new Date(base.getTime() + (diff || 7) * 86_400_000);
     }
 
@@ -505,9 +823,9 @@ function showToast(message, type = 'info', durationMs = 3500) {
 // ─── Generic helpers ──────────────────────────────────────────────────────────
 function downloadFile(name, content, type) {
     const blob = new Blob([content], { type });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     a.download = name;
     a.style.display = 'none';
     document.body.appendChild(a);
@@ -518,7 +836,11 @@ function downloadFile(name, content, type) {
 }
 
 function flashBtn(btn, tempText, original) {
-    if (!btn) return;
+    if (!btn) {
+        return;
+    }
     btn.textContent = tempText;
-    setTimeout(() => { btn.textContent = original; }, 2000);
+    setTimeout(() => {
+        btn.textContent = original;
+    }, 2000);
 }

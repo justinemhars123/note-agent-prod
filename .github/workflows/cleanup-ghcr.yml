@@ -1,0 +1,56 @@
+name: Cleanup GHCR old images
+
+on:
+  schedule:
+    - cron: '0 3 * * 0' # weekly at 03:00 UTC on Sundays
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Cleanup old GHCR package versions
+        env:
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE: note-to-action-agent
+          GHTOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          possible_bases=("orgs" "users")
+          API_BASE=""
+          for base in "${possible_bases[@]}"; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${GHTOKEN}" "https://api.github.com/${base}/${OWNER}")
+            if [ "$status" = "200" ]; then
+              API_BASE=$base
+              break
+            fi
+          done
+          if [ -z "$API_BASE" ]; then
+            echo "Could not determine owner type (org/user) - aborting"
+            exit 1
+          fi
+          echo "Using API base: $API_BASE"
+          PAGE=1
+          CUTOFF_TS=$(date -d '30 days ago' +%s)
+          while true; do
+            resp=$(curl -s -H "Authorization: Bearer ${GHTOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/${API_BASE}/${OWNER}/packages/container/${PACKAGE}/versions?page=${PAGE}&per_page=100")
+            count=$(echo "$resp" | jq 'length')
+            if [ "$count" -eq 0 ]; then
+              break
+            fi
+            echo "$resp" | jq -c '.[]' | while read -r item; do
+              id=$(echo "$item" | jq -r '.id')
+              created=$(echo "$item" | jq -r '.created_at')
+              created_ts=$(date -d "$created" +%s)
+              if [ "$created_ts" -lt "$CUTOFF_TS" ]; then
+                echo "Deleting version $id created $created"
+                curl -s -X DELETE -H "Authorization: Bearer ${GHTOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/${API_BASE}/${OWNER}/packages/container/${PACKAGE}/versions/${id}"
+              fi
+            done
+            PAGE=$((PAGE+1))
+          done

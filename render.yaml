@@ -1,0 +1,24 @@
+# Render service manifest for note-to-action-agent backend
+services:
+  - type: web
+    name: note-to-action-agent-backend
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GROQ_API_KEY
+        generator: secret
+      - key: SUPABASE_URL
+        generator: secret
+      - key: SUPABASE_ANON_KEY
+        generator: secret
+      - key: OPENAI_API_KEY
+        generator: secret
+      - key: SENTRY_DSN
+        generator: secret
+    healthCheckPath: /health
+    autoDeploy: true

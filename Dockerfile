@@ -22,6 +22,8 @@ WORKDIR /app
 
 # Install dumb-init to handle signals properly
 RUN apk add --no-cache dumb-init
+# Set production mode in the final image
+ENV NODE_ENV=production
 
 # Copy package files
 COPY package*.json ./
@@ -32,9 +34,10 @@ RUN npm ci --only=production
 # Copy source from builder
 COPY --from=builder /app . 
 
-# Create non-root user for security
+# Create non-root user for security and ensure permissions
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app
 
 USER nodejs
 

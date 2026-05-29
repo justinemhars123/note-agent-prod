@@ -20,6 +20,11 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# ─── Supabase local development ───────────────────────────────────────────────
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
 # ─── Editor ───────────────────────────────────────────────────────────────────
 .vscode/
 .idea/

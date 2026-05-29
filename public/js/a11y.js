@@ -29,7 +29,9 @@ export function announceToScreenReader(message, priority = 'polite') {
  * @param {string} announce - Optional message to announce
  */
 export function setFocus(element, announce = null) {
-    if (!element) return;
+    if (!element) {
+        return;
+    }
 
     if (announce) {
         announceToScreenReader(announce, 'polite');
@@ -61,16 +63,16 @@ export function makeIconButtonAccessible(button, label) {
  * @param {HTMLElement} errorElement - Error message element
  */
 export function linkErrorToField(field, errorElement) {
-    if (!field || !errorElement) return;
+    if (!field || !errorElement) {
+        return;
+    }
 
     const errorId = errorElement.id || `error-${Math.random().toString(36).substr(2, 9)}`;
     errorElement.id = errorId;
     errorElement.setAttribute('role', 'alert');
 
     const currentDescribedBy = field.getAttribute('aria-describedby') || '';
-    const updatedDescribedBy = currentDescribedBy
-        ? `${currentDescribedBy} ${errorId}`
-        : errorId;
+    const updatedDescribedBy = currentDescribedBy ? `${currentDescribedBy} ${errorId}` : errorId;
 
     field.setAttribute('aria-describedby', updatedDescribedBy);
 }
@@ -82,7 +84,9 @@ export function linkErrorToField(field, errorElement) {
  * @param {boolean} isExpanded - Whether the panel is expanded
  */
 export function updateCollapsibleState(button, panel, isExpanded) {
-    if (!button || !panel) return;
+    if (!button || !panel) {
+        return;
+    }
 
     button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
     panel.hidden = !isExpanded;
@@ -123,7 +127,9 @@ export function createSkipToMainLink() {
  * @param {boolean} isInvalid - Whether field has validation error
  */
 export function updateFieldAccessibility(field, isRequired = false, isInvalid = false) {
-    if (!field) return;
+    if (!field) {
+        return;
+    }
 
     if (isRequired) {
         field.setAttribute('aria-required', 'true');
@@ -143,7 +149,9 @@ export function updateFieldAccessibility(field, isRequired = false, isInvalid = 
  * @param {number} total - Total/maximum value
  */
 export function updateProgressBarAccessibility(bar, current, total) {
-    if (!bar) return;
+    if (!bar) {
+        return;
+    }
 
     const percentage = Math.round((current / total) * 100);
 
@@ -163,13 +171,17 @@ export function trapFocus(modal) {
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
 
-    if (focusableElements.length === 0) return;
+    if (focusableElements.length === 0) {
+        return;
+    }
 
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
 
     modal.addEventListener('keydown', (e) => {
-        if (e.key !== 'Tab') return;
+        if (e.key !== 'Tab') {
+            return;
+        }
 
         if (e.shiftKey) {
             // Shift + Tab
@@ -193,7 +205,9 @@ export function trapFocus(modal) {
  * @returns {boolean}
  */
 export function isAccessible(element) {
-    if (!element) return false;
+    if (!element) {
+        return false;
+    }
 
     const style = window.getComputedStyle(element);
 

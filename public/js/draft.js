@@ -4,7 +4,7 @@
 // No fetch(), no DOM rendering, no app logic.
 
 const DRAFT_KEY = 'noteagent_draft';
-let   saveTimer = null;
+let saveTimer = null;
 
 /**
  * Start auto-saving the textarea every 2 seconds.
@@ -39,10 +39,14 @@ export function clearDraft() {
 
 function restoreDraft(textarea, onCounterUpdate) {
     const saved = localStorage.getItem(DRAFT_KEY);
-    if (!saved || !saved.trim()) return;
+    if (!saved || !saved.trim()) {
+        return;
+    }
 
     textarea.value = saved;
-    if (onCounterUpdate) onCounterUpdate();
+    if (onCounterUpdate) {
+        onCounterUpdate();
+    }
     showDraftBanner();
 }
 
@@ -55,6 +59,8 @@ function showDraftBanner() {
     `;
     // Insert before the textarea's parent card
     const card = document.querySelector('.card');
-    if (card) card.prepend(banner);
+    if (card) {
+        card.prepend(banner);
+    }
     setTimeout(() => banner.remove(), 6000);
 }

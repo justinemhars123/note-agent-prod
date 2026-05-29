@@ -23,7 +23,6 @@ export function isVoiceSupported() {
  */
 export function toggleVoice(textarea, btn, onTranscript) {
     if (!isVoiceSupported()) {
-        alert('Voice input is not supported in your browser. Try Chrome or Edge.');
         return;
     }
 
@@ -39,9 +38,9 @@ function startVoice(textarea, btn, onTranscript) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SR();
 
-    recognition.continuous     = true;   // keep recording until stopped
-    recognition.interimResults = true;   // show partial results
-    recognition.lang           = 'en-US';
+    recognition.continuous = true; // keep recording until stopped
+    recognition.interimResults = true; // show partial results
+    recognition.lang = 'en-US';
 
     let finalTranscript = '';
 
@@ -56,14 +55,19 @@ function startVoice(textarea, btn, onTranscript) {
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
             const t = e.results[i][0].transcript;
-            if (e.results[i].isFinal) finalTranscript += t + ' ';
-            else                       interim += t;
+            if (e.results[i].isFinal) {
+                finalTranscript += t + ' ';
+            } else {
+                interim += t;
+            }
         }
 
         // Show combined in textarea
         const base = textarea.dataset.voiceBase || '';
         textarea.value = base + finalTranscript + interim;
-        if (onTranscript) onTranscript(textarea.value);
+        if (onTranscript) {
+            onTranscript(textarea.value);
+        }
     };
 
     recognition.onerror = (e) => {
@@ -72,7 +76,9 @@ function startVoice(textarea, btn, onTranscript) {
     };
 
     recognition.onend = () => {
-        if (isListening) recognition.start(); // auto-restart if still active
+        if (isListening) {
+            recognition.start();
+        } // auto-restart if still active
     };
 
     // Snapshot existing text so we append rather than replace

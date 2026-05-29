@@ -3,28 +3,68 @@
 // mounting middleware, wiring routes, and starting the server.
 // All business logic lives in routes/ and helpers/.
 
-const express   = require('express');
-const cors      = require('cors');
-const path      = require('path');
+require('dotenv').config(); // Load environment variables first!
+
+const { Sentry, initSentry } = require('./helpers/sentry');
+// Initialize Sentry as early as possible so modules can report errors during startup
+initSentry();
+
+const logger = require('./helpers/logger');
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
 const rateLimit = require('express-rate-limit');
-const helmet    = require('helmet');
-const { config } = require('dotenv');
+const helmet = require('helmet');
+const { optionalAuth } = require('./helpers/authMiddleware');
 
-config(); // load .env
+// ─── Environment validation ──────────────────────────────────────────────────
+// REQUIRED vars: server exits immediately if any are missing/invalid.
+// OPTIONAL vars: server warns but continues — features degrade gracefully.
+const REQUIRED_ENV = [
+    {
+        key: 'GROQ_API_KEY',
+        hint: 'Get your key at https://console.groq.com/keys',
+        validator: (v) => v && v.startsWith('gsk_'),
+    },
+    { key: 'SUPABASE_URL', hint: 'Found in your Supabase project → Settings → API' },
+    {
+        key: 'SUPABASE_KEY',
+        hint: 'The anon/public key in Supabase → Settings → API (or set SUPABASE_ANON_KEY)',
+        validator: (v) => !!(v || process.env.SUPABASE_ANON_KEY),
+    },
+];
 
-// ─── API key validation ───────────────────────────────────────────────────────
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const OPTIONAL_ENV = [
+    {
+        key: 'SUPABASE_SERVICE_KEY',
+        hint: 'The service_role key — needed for admin-level auth verification',
+    },
+    { key: 'SENTRY_DSN', hint: 'Get a free DSN at https://sentry.io for error monitoring' },
+];
 
-if (!GROQ_API_KEY || !GROQ_API_KEY.startsWith('gsk_')) {
-    console.error('');
-    console.error('❌  GROQ_API_KEY is missing or invalid in your .env file.');
-    console.error('    Get your key at: https://console.groq.com/keys');
-    console.error('    Then add it to .env as:  GROQ_API_KEY=gsk_...');
-    console.error('');
+const missingVars = [];
+for (const { key, hint, validator } of REQUIRED_ENV) {
+    const val = process.env[key];
+    if (!val || (validator && !validator(val))) {
+        missingVars.push(`  ❌ ${key}\n     → ${hint}`);
+    }
+}
+
+if (missingVars.length > 0) {
+    logger.error('\n🚨 Missing or invalid environment variables:');
+    logger.error(missingVars.join('\n'));
+    logger.error('\n   Add the above to your .env file and restart the server.\n');
     process.exit(1);
 }
 
-console.log('🔑 API key loaded OK');
+// Warn about optional vars — features will degrade gracefully without them
+for (const { key, hint } of OPTIONAL_ENV) {
+    if (!process.env[key]) {
+        logger.warn(`⚠️  Optional: ${key} not set → ${hint}`);
+    }
+}
+
+logger.info('🔑 All environment variables validated OK');
 
 // ─── App setup ────────────────────────────────────────────────────────────────
 const app = express();
@@ -35,16 +75,14 @@ const app = express();
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
     : ['http://localhost:3001', 'http://localhost:3000', 'http://127.0.0.1:3001'];
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like same-origin static file requests from the browser)
         if (!origin) {
             return callback(null, true);
         }
-
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -53,35 +91,43 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-    maxAge: 86400 // 24 hours
+    // Authorization header is required for JWT Bearer tokens (Supabase Auth)
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400, // 24 hours
 };
 
 // ─── Security headers (helmet) ───────────────────────────────────────────────
 // Covers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options,
 //         Referrer-Policy, X-XSS-Protection, Permissions-Policy + more.
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc:  ["'self'"],
-            scriptSrc:   ["'self'"],                                       // No inline scripts
-            styleSrc:    ["'self'", 'https://fonts.googleapis.com'],
-            fontSrc:     ["'self'", 'https://fonts.gstatic.com'],
-            connectSrc:  ["'self'"],                                       // Only talk to own server
-            imgSrc:      ["'self'", 'data:'],
-            frameSrc:    ["'none'"],
-            objectSrc:   ["'none'"],
-            upgradeInsecureRequests: [],
-        }
-    },
-    hsts: {
-        maxAge: 31536000,          // 1 year
-        includeSubDomains: true,
-        preload: true
-    },
-    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    permittedCrossDomainPolicies: false,
-}));
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'", 'https://cdn.jsdelivr.net', 'https://browser.sentry-cdn.com'],
+                styleSrc: ["'self'", 'https://fonts.googleapis.com'],
+                fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+                connectSrc: [
+                    "'self'",
+                    'https://*.supabase.co',
+                    'https://*.sentry.io',
+                    'https://*.ingest.sentry.io',
+                ],
+                imgSrc: ["'self'", 'data:', 'https://www.gstatic.com'],
+                frameSrc: ["'none'"],
+                objectSrc: ["'none'"],
+                upgradeInsecureRequests: [],
+            },
+        },
+        hsts: {
+            maxAge: 31536000, // 1 year
+            includeSubDomains: true,
+            preload: true,
+        },
+        referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+        permittedCrossDomainPolicies: false,
+    })
+);
 
 app.use(cors(corsOptions));
 
@@ -92,33 +138,65 @@ app.use(express.json({ limit: '10kb' }));
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
 // 15 requests per IP per minute — cannot be bypassed from the browser
 const apiLimiter = rateLimit({
-    windowMs: 60 * 1000,  // 1 minute
-    max: 15,              // max 15 requests per IP
+    windowMs: 60 * 1000, // 1 minute
+    max: 15, // max 15 requests per IP
     standardHeaders: true,
     legacyHeaders: false,
     message: {
-        error: 'Too many requests — you have been rate limited. Please wait a minute and try again.'
-    }
+        error: 'Too many requests — you have been rate limited. Please wait a minute and try again.',
+    },
 });
 
-app.use('/process', apiLimiter, require('./routes/process'));
-app.use('/history', require('./routes/history'));
+app.get('/api/config', (req, res) => {
+    // Only expose the public/anon key to browser clients. Do NOT return service_role keys.
+    res.json({
+        supabaseUrl: process.env.SUPABASE_URL || '',
+        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
+        // Public Sentry DSN is safe to expose to the browser
+        sentryDsn: process.env.SENTRY_DSN || '',
+    });
+});
 
-// ─── Start ────────────────────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date() });
+});
+
+app.use('/process', apiLimiter, optionalAuth, require('./routes/process'));
+app.use('/history', optionalAuth, require('./routes/history'));
+
+// ─── Sentry error handler (must come after routes, before server.listen) ───────────
+if (process.env.SENTRY_DSN) {
+    app.use(Sentry.expressErrorHandler());
+}
+
+// ─── Start ─────────────────────────────────────────────────────────────────
 if (!IS_PRODUCTION) {
-    console.log(`🛠️  Running in development mode`);
+    logger.info(`🛠️  Running in development mode`);
 }
 
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-    console.log(`✅ Agent running at http://localhost:${PORT}`);
+    logger.info(`✅ Agent running at http://localhost:${PORT}`);
 });
 
 server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${PORT} is already in use. Set a different PORT in .env and restart the app.`);
+        logger.error(
+            '❌ Port',
+            PORT,
+            'is already in use. Set a different PORT in .env and restart the app.'
+        );
         process.exit(1);
     }
-
     throw error;
+});
+
+// ─── Global unhandled rejection guard ────────────────────────────────────────
+process.on('unhandledRejection', (reason) => {
+    logger.error('🔥 Unhandled Promise Rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+    logger.error('🔥 Uncaught Exception:', err);
+    process.exit(1);
 });

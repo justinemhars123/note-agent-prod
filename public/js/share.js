@@ -14,15 +14,15 @@ const SHARE_PREFIX = '#share=';
 export function shareAsLink(text, onDone) {
     try {
         const encoded = btoa(encodeURIComponent(text));
-        const url     = `${location.origin}${location.pathname}${SHARE_PREFIX}${encoded}`;
+        const url = `${location.origin}${location.pathname}${SHARE_PREFIX}${encoded}`;
 
-        navigator.clipboard.writeText(url)
-            .then(()  => onDone('copied'))
-            .catch(()  => onDone('fallback', url));
+        navigator.clipboard
+            .writeText(url)
+            .then(() => onDone('copied'))
+            .catch(() => onDone('fallback', url));
 
         // Update the address bar without a reload
         history.replaceState(null, '', `${SHARE_PREFIX}${encoded}`);
-
     } catch (e) {
         console.error('Share encoding error:', e);
         onDone('error');
@@ -37,7 +37,9 @@ export function shareAsLink(text, onDone) {
  */
 export function getSharedResult() {
     const hash = location.hash;
-    if (!hash.startsWith(SHARE_PREFIX)) return null;
+    if (!hash.startsWith(SHARE_PREFIX)) {
+        return null;
+    }
 
     try {
         return decodeURIComponent(atob(hash.slice(SHARE_PREFIX.length)));

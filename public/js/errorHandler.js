@@ -9,45 +9,45 @@ const ERROR_MESSAGES = {
         title: '❌ Network Error',
         message: 'Could not reach the server. Check your internet connection and try again.',
         recoverable: true,
-        actions: ['Retry', 'Check connection']
+        actions: ['Retry', 'Check connection'],
     },
     RATE_LIMIT: {
         title: '⏱️ Rate Limited',
         message: 'Too many requests. Please wait a moment before trying again.',
         recoverable: true,
         retryAfter: 5,
-        actions: ['Retry in 5s', 'Wait manually']
+        actions: ['Retry in 5s', 'Wait manually'],
     },
     API_TIMEOUT: {
         title: '⏳ Request Timeout',
         message: 'The AI took too long to respond. Please try with shorter notes.',
         recoverable: true,
-        actions: ['Retry', 'Shorten notes']
+        actions: ['Retry', 'Shorten notes'],
     },
     EMPTY_INPUT: {
         title: '📝 Empty Notes',
         message: 'Please add some notes before submitting.',
         recoverable: false,
-        actions: ['Type notes']
+        actions: ['Type notes'],
     },
     INPUT_TOO_LONG: {
         title: '📏 Notes Too Long',
         message: 'Your notes exceed 2,000 characters. Please shorten them.',
         recoverable: false,
-        actions: ['Edit notes']
+        actions: ['Edit notes'],
     },
     API_ERROR: {
         title: '🔌 API Error',
         message: 'The AI provider returned an error. Please try again.',
         recoverable: true,
-        actions: ['Retry', 'Check status']
+        actions: ['Retry', 'Check status'],
     },
     UNKNOWN_ERROR: {
         title: '⚠️ Something Went Wrong',
         message: 'An unexpected error occurred. Please try again or contact support.',
         recoverable: false,
-        actions: ['Retry', 'Contact support']
-    }
+        actions: ['Retry', 'Contact support'],
+    },
 };
 
 /**
@@ -88,7 +88,9 @@ export function parseError(error) {
  * @param {function} onRetry - Callback for retry action
  */
 export function displayError(errorBox, error, onRetry = null) {
-    if (!errorBox) return;
+    if (!errorBox) {
+        return;
+    }
 
     const errorInfo = parseError(error);
 
@@ -119,9 +121,7 @@ export function displayError(errorBox, error, onRetry = null) {
 
     // Add retry button if recoverable
     if (errorInfo.recoverable && onRetry) {
-        const retryText = errorInfo.retryAfter
-            ? `Retry in ${errorInfo.retryAfter}s`
-            : 'Retry';
+        const retryText = errorInfo.retryAfter ? `Retry in ${errorInfo.retryAfter}s` : 'Retry';
 
         content += `
             <button class="error-retry-btn">
@@ -201,5 +201,5 @@ export default {
     clearError,
     withErrorBoundary,
     isRecoverable,
-    ERROR_MESSAGES
+    ERROR_MESSAGES,
 };

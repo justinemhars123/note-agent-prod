@@ -6,14 +6,15 @@
 //   email    → status-update paragraph
 // Also handles: multi-language auto-detect, custom prompts, OpenAI fallback.
 
-const express            = require('express');
-const { callGroq }       = require('../helpers/groq');
-const { callOpenAI }     = require('../helpers/openai');
+const express = require('express');
+const { callGroq } = require('../helpers/groq');
+const { callOpenAI } = require('../helpers/openai');
+const logger = require('../helpers/logger');
 
 const router = express.Router();
-const MAX_INPUT_CHARS        = 2000;
+const MAX_INPUT_CHARS = 2000;
 const MAX_CUSTOM_PROMPT_CHARS = 500;
-const VALID_MODES            = ['default', 'simple', 'meeting', 'email'];
+const VALID_MODES = ['default', 'simple', 'meeting', 'email'];
 
 // Patterns that indicate prompt injection attempts
 const INJECTION_PATTERNS = [
@@ -29,7 +30,9 @@ const INJECTION_PATTERNS = [
 
 // ─── System prompts per mode ──────────────────────────────────────────────────
 function buildSystemPrompt(mode, today, customPrompt) {
-    if (customPrompt && customPrompt.trim()) return customPrompt.trim();
+    if (customPrompt && customPrompt.trim()) {
+        return customPrompt.trim();
+    }
 
     const base = `You are a productivity assistant. Today's date is: ${today}.
 IMPORTANT: Detect the language the user wrote their notes in and respond in THAT SAME LANGUAGE.
@@ -102,7 +105,7 @@ If a category has no tasks, omit it entirely.`;
 
 // ─── AI call with Groq-first, OpenAI fallback ─────────────────────────────────
 async function callAI(payload) {
-    const groqKey   = process.env.GROQ_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY;
     const openaiKey = process.env.OPENAI_API_KEY; // optional
 
     // Try Groq first
@@ -111,16 +114,15 @@ async function callAI(payload) {
 
         // Only fall back on server errors, not 4xx client errors
         if (res.status >= 500 && openaiKey) {
-            console.warn('⚠️  Groq returned 5xx — falling back to OpenAI');
+            logger.warn('⚠️  Groq returned 5xx — falling back to OpenAI');
             return { response: await callOpenAI(payload, openaiKey), provider: 'openai' };
         }
 
         return { response: res, provider: 'groq' };
-
     } catch (networkErr) {
         // Network failure — try OpenAI if available
         if (openaiKey) {
-            console.warn('⚠️  Groq network error — falling back to OpenAI');
+            logger.warn('⚠️  Groq network error — falling back to OpenAI');
             const res = await callOpenAI(payload, openaiKey);
             return { response: res, provider: 'openai' };
         }
@@ -143,14 +145,14 @@ router.post('/', async (req, res) => {
     }
     if (notes.length > MAX_INPUT_CHARS) {
         return res.status(400).json({
-            error: `Notes are too long. Keep them under ${MAX_INPUT_CHARS.toLocaleString()} characters.`
+            error: `Notes are too long. Keep them under ${MAX_INPUT_CHARS.toLocaleString()} characters.`,
         });
     }
 
     // ─── Mode allowlist validation ─────────────────────────────────────────────────
     if (mode && !VALID_MODES.includes(mode)) {
         return res.status(400).json({
-            error: `Invalid mode. Must be one of: ${VALID_MODES.join(', ')}.`
+            error: `Invalid mode. Must be one of: ${VALID_MODES.join(', ')}.`,
         });
     }
 
@@ -161,19 +163,22 @@ router.post('/', async (req, res) => {
         }
         if (customPrompt.length > MAX_CUSTOM_PROMPT_CHARS) {
             return res.status(400).json({
-                error: `Custom prompt must be under ${MAX_CUSTOM_PROMPT_CHARS} characters.`
+                error: `Custom prompt must be under ${MAX_CUSTOM_PROMPT_CHARS} characters.`,
             });
         }
-        if (INJECTION_PATTERNS.some(pattern => pattern.test(customPrompt))) {
-            console.warn(`⚠️  Prompt injection attempt blocked: ${customPrompt.slice(0, 80)}...`);
+        if (INJECTION_PATTERNS.some((pattern) => pattern.test(customPrompt))) {
+            logger.warn(`⚠️  Prompt injection attempt blocked: ${customPrompt.slice(0, 80)}...`);
             return res.status(400).json({
-                error: 'Custom prompt contains disallowed content.'
+                error: 'Custom prompt contains disallowed content.',
             });
         }
     }
 
     const today = new Date().toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
     });
 
     const systemPrompt = buildSystemPrompt(mode, today, customPrompt);
@@ -181,41 +186,45 @@ router.post('/', async (req, res) => {
     const payload = {
         messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user',   content: `Here are my notes:\n${notes}` }
+            { role: 'user', content: `Here are my notes:\n${notes}` },
         ],
         temperature: 0.3,
-        max_tokens: 1024
+        max_tokens: 1024,
     };
 
     try {
         const { response, provider } = await callAI(payload);
         const data = await response.json();
 
-        console.log(`Provider: ${provider} | Status: ${response.status} | Mode: ${mode}`);
+        logger.info(`Provider: ${provider} | Status: ${response.status} | Mode: ${mode}`);
 
         if (response.status === 429) {
             return res.status(429).json({
-                error: 'Too many requests — rate limited. Wait a moment and try again.'
+                error: 'Too many requests — rate limited. Wait a moment and try again.',
             });
         }
 
         if (!data.choices || data.choices.length === 0) {
             console.error('Unexpected AI response:', JSON.stringify(data, null, 2));
+            logger.error('Unexpected AI response:', JSON.stringify(data, null, 2));
             return res.status(500).json({ error: data.error?.message || 'AI returned no result.' });
         }
 
         const resultText = data.choices[0].message.content;
 
-        // Asynchronously save to Supabase (if configured)
-        if (req.body.userId) {
-            // We don't await this because we don't want to slow down the user's response
-            // saveNote handles its own error catching
+        // Save to Supabase (if configured and user is authenticated)
+        if (req.user) {
             const { saveNote } = require('../helpers/supabase');
-            saveNote(req.body.userId, notes, resultText, provider, mode);
+            const finalUserId = req.user.id;
+
+            // We pass the auth token so the backend can bypass RLS on behalf of the user
+            const token = req.headers.authorization;
+
+            // Await the save so that when the frontend calls refreshHistory(), the DB is already updated
+            await saveNote(finalUserId, notes, resultText, provider, mode, token);
         }
 
         res.json({ result: resultText, provider, mode });
-
     } catch (err) {
         console.error('Process route error:', err);
         res.status(500).json({ error: 'Could not reach AI. Check your internet connection.' });

@@ -30,10 +30,7 @@ export function createDeduplicator() {
             // Create new request
             const promise = (async () => {
                 try {
-                    const result = await fn();
-                    return result;
-                } catch (error) {
-                    throw error;
+                    return await fn();
                 } finally {
                     // Clean up after request completes
                     pendingRequests.delete(key);
@@ -94,7 +91,9 @@ export function createRequestCache(ttlMs = 300000) {
          * @returns {any|null} - Cached result or null if expired/missing
          */
         get(key) {
-            if (!cache.has(key)) return null;
+            if (!cache.has(key)) {
+                return null;
+            }
 
             const entry = cache.get(key);
             const age = Date.now() - entry.timestamp;

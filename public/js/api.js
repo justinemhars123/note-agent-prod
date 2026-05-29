@@ -13,18 +13,28 @@ const MAX_CHARS = 2000;
  * @param {string} customPrompt  - optional override system prompt
  * @returns {Promise<{ result: string, provider: string, mode: string }>}
  */
+import { getAuthToken } from './auth.js';
+
 export async function fetchTodoList(notes, mode = 'default', customPrompt = '', userId = null) {
     if (!notes || !notes.trim()) {
         throw new Error('Please add some notes first.');
     }
     if (notes.length > MAX_CHARS) {
-        throw new Error(`Notes are too long. Keep them under ${MAX_CHARS.toLocaleString()} characters.`);
+        throw new Error(
+            `Notes are too long. Keep them under ${MAX_CHARS.toLocaleString()} characters.`
+        );
+    }
+
+    const headers = { 'Content-Type': 'application/json' };
+    const token = getAuthToken();
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
     }
 
     const response = await fetch('/process', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes, mode, customPrompt, userId })
+        headers: headers,
+        body: JSON.stringify({ notes, mode, customPrompt, userId }),
     });
 
     if (response.status === 429) {

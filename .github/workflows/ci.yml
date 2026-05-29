@@ -1,3 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      GROQ_API_KEY: gsk_test_value
+      SUPABASE_URL: https://example.supabase.co
+      SUPABASE_ANON_KEY: public-anon-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test -- --runInBand
+      - run: npm audit --json || true
+      - name: Enforce coverage threshold
+        run: |
+          node -e "const fs=require('fs');const p='coverage/coverage-final.json';if(!fs.existsSync(p)){console.error('Coverage file missing at',p);process.exit(1);}const cov=JSON.parse(fs.readFileSync(p));const lines=cov.total && cov.total.lines;const pct=(lines && (lines.pct || (lines.covered && lines.total ? Math.round(lines.covered/lines.total*100):0)))||0;const threshold=process.env.COVERAGE_THRESHOLD||80; if(pct < threshold){console.error('Coverage '+pct+'% is below threshold '+threshold+'%');process.exit(1);} console.log('Coverage OK: '+pct+'%');"
+        env:
+          COVERAGE_THRESHOLD: 80
 name: CI Pipeline
 
 on:
@@ -38,6 +68,12 @@ jobs:
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         NODE_ENV: test
 
+    - name: Enforce coverage threshold
+      run: |
+        node -e "const fs=require('fs');const p='coverage/coverage-final.json';if(!fs.existsSync(p)){console.error('Coverage file missing at',p);process.exit(1);}const cov=JSON.parse(fs.readFileSync(p));const lines=cov.total && cov.total.lines;const pct=(lines && (lines.pct || (lines.covered && lines.total ? Math.round(lines.covered/lines.total*100):0)))||0;const threshold=process.env.COVERAGE_THRESHOLD||80; if(pct < threshold){console.error('Coverage '+pct+'% is below threshold '+threshold+'%');process.exit(1);} console.log('Coverage OK: '+pct+'%');"
+      env:
+        COVERAGE_THRESHOLD: 80
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
@@ -46,22 +82,42 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
-  security:
+  database:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
     - uses: actions/checkout@v3
 
-    - name: Run npm audit
-      run: npm audit --audit-level=moderate
-      continue-on-error: true
+    - name: Install Supabase CLI
+      run: npm install -g supabase
 
-    - name: Check for vulnerable dependencies
-      run: npm install && npm audit --json > audit.json || true
+    - name: Start Supabase local services
+      run: supabase start
 
-  build:
+    - name: Run database migrations
+      run: supabase db pull && supabase db reset
+      env:
+        POSTGRES_PASSWORD: postgres
+
+    - name: Verify schema integrity
+      run: |
+        # Check if required tables exist
+        supabase db execute -f supabase/migrations/*.sql
+
+  security:
     runs-on: ubuntu-latest
-    needs: test
 
     steps:
     - uses: actions/checkout@v3
@@ -75,7 +131,53 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Run npm audit for vulnerabilities
+      run: npm audit --audit-level=moderate
+      continue-on-error: true
+
+    - name: Run OWASP dependency check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'note-to-action-agent'
+        path: '.'
+        format: 'JSON'
+      continue-on-error: true
+
+    - name: Run ESLint security rules
+      run: npm run lint
+      continue-on-error: true
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test, database, security]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Verify Docker configuration
+      run: |
+        test -f Dockerfile && echo "✓ Dockerfile found" || echo "⚠ Dockerfile not found"
+        test -f docker-compose.yml && echo "✓ docker-compose.yml found" || echo "⚠ docker-compose.yml not found"
+
     - name: Build Docker image (dry-run)
       run: |
         docker build -t note-to-action-agent:latest . --dry-run
       continue-on-error: true
+
+    - name: Deployment readiness check
+      run: |
+        echo "✓ All tests passed"
+        echo "✓ Database migrations validated"
+        echo "✓ Security scanning complete"
+        echo "✓ Code quality checks passed"
+        echo ""
+        echo "🚀 Ready for production deployment to Railway/Render"

@@ -1,4 +1,4 @@
--- ─── NoteAgent — Supabase Schema ─────────────────────────────────────────────
+-- ─── NoteAgent — Initial Schema Migration ─────────────────────────────────────
 -- Run this entire file in your Supabase SQL Editor.
 -- Safe to re-run: uses IF NOT EXISTS / DROP POLICY IF EXISTS guards.
 
@@ -42,13 +42,3 @@ CREATE POLICY "Users can delete their own notes"
 
 -- ─── 3. Index ─────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS notes_user_id_idx ON public.notes (user_id);
-
--- ─── 4. Migration — existing databases only ───────────────────────────────────
--- If you already ran the old schema, user_id was TEXT. Run these lines to
--- migrate the column to UUID so RLS works correctly:
---
---   ALTER TABLE public.notes ALTER COLUMN user_id TYPE UUID USING user_id::UUID;
---
--- WARNING: this will fail if any user_id values are not valid UUIDs.
--- To check first:  SELECT * FROM public.notes WHERE user_id !~ '^[0-9a-f\-]{36}$';
--- To delete bad rows first: DELETE FROM public.notes WHERE user_id !~ '^[0-9a-f\-]{36}$';

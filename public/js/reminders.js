@@ -13,13 +13,15 @@ const WEEKDAYS = {
     wednesday: 3,
     thursday: 4,
     friday: 5,
-    saturday: 6
+    saturday: 6,
 };
 
 let activeTimers = new Map();
 
 export function initDueReminders() {
-    if (!supportsNotifications()) return;
+    if (!supportsNotifications()) {
+        return;
+    }
     scheduleStoredReminders();
 }
 
@@ -43,13 +45,15 @@ export function scheduleDueReminders(resultText) {
     }
 
     const reminders = loadReminders();
-    const existingIds = new Set(reminders.map(reminder => reminder.id));
+    const existingIds = new Set(reminders.map((reminder) => reminder.id));
     const parsed = extractDueTasks(resultText);
     let added = 0;
 
-    parsed.forEach(task => {
+    parsed.forEach((task) => {
         const id = buildReminderId(task.title, task.fireAt);
-        if (existingIds.has(id)) return;
+        if (existingIds.has(id)) {
+            return;
+        }
 
         reminders.push({
             id,
@@ -58,7 +62,7 @@ export function scheduleDueReminders(resultText) {
             fireAt: task.fireAt,
             dueAt: task.dueAt,
             createdAt: Date.now(),
-            shown: false
+            shown: false,
         });
         existingIds.add(id);
         added += 1;
@@ -70,7 +74,9 @@ export function scheduleDueReminders(resultText) {
 }
 
 export function getReminderPermission() {
-    if (!supportsNotifications()) return 'unsupported';
+    if (!supportsNotifications()) {
+        return 'unsupported';
+    }
     return Notification.permission;
 }
 
@@ -90,12 +96,12 @@ function scheduleStoredReminders() {
 
     const now = Date.now();
     const nextReminders = loadReminders()
-        .filter(reminder => !reminder.shown)
-        .filter(reminder => reminder.dueAt >= startOfToday().getTime());
+        .filter((reminder) => !reminder.shown)
+        .filter((reminder) => reminder.dueAt >= startOfToday().getTime());
 
     saveReminders(nextReminders);
 
-    nextReminders.forEach(reminder => {
+    nextReminders.forEach((reminder) => {
         const delay = Math.max(0, reminder.fireAt - now);
         const timer = setLongTimeout(() => showReminder(reminder), delay);
         activeTimers.set(reminder.id, timer);
@@ -103,7 +109,7 @@ function scheduleStoredReminders() {
 }
 
 function clearTimers() {
-    activeTimers.forEach(timer => clearTimeout(timer));
+    activeTimers.forEach((timer) => clearTimeout(timer));
     activeTimers = new Map();
 }
 
@@ -118,11 +124,11 @@ function setLongTimeout(callback, delay) {
 }
 
 async function showReminder(reminder) {
-    if (Notification.permission !== 'granted') return;
+    if (Notification.permission !== 'granted') {
+        return;
+    }
 
-    const body = reminder.dueText
-        ? `Due ${reminder.dueText}`
-        : 'This task is due today.';
+    const body = reminder.dueText ? `Due ${reminder.dueText}` : 'This task is due today.';
 
     if ('serviceWorker' in navigator) {
         try {
@@ -133,7 +139,7 @@ async function showReminder(reminder) {
                 renotify: true,
                 icon: '/icons/icon-192.svg',
                 badge: '/icons/icon-192.svg',
-                data: { url: '/' }
+                data: { url: '/' },
             });
             markReminderShown(reminder.id);
             return;
@@ -145,16 +151,18 @@ async function showReminder(reminder) {
     new Notification('Task reminder', {
         body: `${reminder.title}\n${body}`,
         tag: reminder.id,
-        icon: '/icons/icon-192.svg'
+        icon: '/icons/icon-192.svg',
     });
     markReminderShown(reminder.id);
 }
 
 function markReminderShown(id) {
     activeTimers.delete(id);
-    saveReminders(loadReminders().map(reminder =>
-        reminder.id === id ? { ...reminder, shown: true } : reminder
-    ));
+    saveReminders(
+        loadReminders().map((reminder) =>
+            reminder.id === id ? { ...reminder, shown: true } : reminder
+        )
+    );
 }
 
 function extractDueTasks(text) {
@@ -163,11 +171,13 @@ function extractDueTasks(text) {
 
     return text
         .split('\n')
-        .map(line => parseTaskLine(line, today))
+        .map((line) => parseTaskLine(line, today))
         .filter(Boolean)
-        .filter(task => {
+        .filter((task) => {
             const key = `${task.title}|${task.fireAt}`;
-            if (seen.has(key)) return false;
+            if (seen.has(key)) {
+                return false;
+            }
             seen.add(key);
             return true;
         });
@@ -175,10 +185,14 @@ function extractDueTasks(text) {
 
 function parseTaskLine(line, today) {
     const raw = line.trim();
-    if (!/^([-*\u2022]|\d+\.)/.test(raw)) return null;
+    if (!/^([-*\u2022]|\d+\.)/.test(raw)) {
+        return null;
+    }
 
     let clean = raw;
-    if (!clean) return null;
+    if (!clean) {
+        return null;
+    }
 
     clean = clean
         .replace(/^[-*\u2022]\s*/, '')
@@ -186,21 +200,31 @@ function parseTaskLine(line, today) {
         .replace(/^\[(\d+)\]\s*/, '')
         .trim();
 
-    if (!clean || isSectionHeader(clean)) return null;
+    if (!clean || isSectionHeader(clean)) {
+        return null;
+    }
 
     const parts = clean.split(/\u2192|->/);
     const title = sanitizeTitle(parts[0]);
     let dueText = parts[1]?.replace(/^Due:\s*/i, '').trim() || '';
 
     if (!dueText) {
-        const inlineMatch = clean.match(/\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
-        if (inlineMatch) dueText = inlineMatch[0];
+        const inlineMatch = clean.match(
+            /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i
+        );
+        if (inlineMatch) {
+            dueText = inlineMatch[0];
+        }
     }
 
-    if (!title || !dueText) return null;
+    if (!title || !dueText) {
+        return null;
+    }
 
     const dueDate = parseDueDate(dueText, today);
-    if (!dueDate) return null;
+    if (!dueDate) {
+        return null;
+    }
 
     const fireDate = new Date(dueDate);
     fireDate.setHours(MORNING_HOUR, 0, 0, 0);
@@ -210,13 +234,15 @@ function parseTaskLine(line, today) {
         fireDate.setTime(now.getTime() + 5_000);
     }
 
-    if (dueDate < startOfToday()) return null;
+    if (dueDate < startOfToday()) {
+        return null;
+    }
 
     return {
         title,
         dueText,
         fireAt: fireDate.getTime(),
-        dueAt: dueDate.getTime()
+        dueAt: dueDate.getTime(),
     };
 }
 
@@ -227,8 +253,12 @@ function parseDueDate(str, today) {
     const base = new Date(today);
     base.setHours(0, 0, 0, 0);
 
-    if (lower === 'today') return base;
-    if (lower === 'tomorrow') return new Date(base.getTime() + DAY_MS);
+    if (lower === 'today') {
+        return base;
+    }
+    if (lower === 'tomorrow') {
+        return new Date(base.getTime() + DAY_MS);
+    }
 
     const dayMatch = lower.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
     if (dayMatch) {
@@ -238,15 +268,20 @@ function parseDueDate(str, today) {
     }
 
     const parsed = new Date(str);
-    if (Number.isNaN(parsed.getTime())) return null;
+    if (Number.isNaN(parsed.getTime())) {
+        return null;
+    }
     parsed.setHours(0, 0, 0, 0);
     return parsed;
 }
 
 function sanitizeTitle(value) {
     return value
-        .replace(/^\s*@\S+\s*/, match => match.trim() + ' ')
-        .replace(/\s*\([^)]*(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)[^)]*\)\s*$/i, '')
+        .replace(/^\s*@\S+\s*/, (match) => match.trim() + ' ')
+        .replace(
+            /\s*\([^)]*(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)[^)]*\)\s*$/i,
+            ''
+        )
         .replace(/\s{2,}/g, ' ')
         .trim();
 }
@@ -256,9 +291,11 @@ function isSectionHeader(value) {
 }
 
 function isSameDay(a, b) {
-    return a.getFullYear() === b.getFullYear()
-        && a.getMonth() === b.getMonth()
-        && a.getDate() === b.getDate();
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
 }
 
 function startOfToday() {
@@ -268,7 +305,10 @@ function startOfToday() {
 }
 
 function buildReminderId(title, fireAt) {
-    return `noteagent:${fireAt}:${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}`;
+    return `noteagent:${fireAt}:${title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .slice(0, 60)}`;
 }
 
 function loadReminders() {
