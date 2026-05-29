@@ -2,11 +2,10 @@
 services:
   - type: web
     name: note-to-action-agent-backend
-    env: node
+    env: docker
     region: oregon
     plan: starter
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    dockerfilePath: Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
@@ -20,5 +19,5 @@ services:
         generator: secret
       - key: SENTRY_DSN
         generator: secret
-    healthCheckPath: /health
+    healthCheckPath: /api/health
     autoDeploy: true
