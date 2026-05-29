@@ -30,22 +30,28 @@ console.log('🔑 API key loaded OK');
 const app = express();
 
 // ─── CORS Configuration ───────────────────────────────────────────────────────
-// Allow requests from localhost and specific domains
+// Origins are driven by the ALLOWED_ORIGINS env var (comma-separated).
+// Falls back to localhost for local development.
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : ['http://localhost:3001', 'http://localhost:3000', 'http://127.0.0.1:3001'];
+
 const corsOptions = {
     origin: function (origin, callback) {
-        const allowedOrigins = [
-            'http://localhost:3001',
-            'http://localhost:3000',
-            'http://127.0.0.1:3001',
-            // Add your production domain here when deploying
-            // 'https://your-domain.com'
-        ];
+        // In production: always require an origin header (blocks curl/postman abuse)
+        // In development: allow requests with no origin (e.g. same-origin fetch)
+        if (!origin) {
+            return IS_PRODUCTION
+                ? callback(new Error('Not allowed by CORS'))
+                : callback(null, true);
+        }
 
-        // Allow requests with no origin (mobile apps, curl, etc)
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS'));
+            callback(new Error(`Origin ${origin} not allowed by CORS`));
         }
     },
     credentials: true,
