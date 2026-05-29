@@ -4,6 +4,7 @@
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL   = 'gpt-4o-mini'; // cheap + fast fallback
+const TIMEOUT_MS     = 30_000;
 
 /**
  * Call OpenAI chat completions.
@@ -12,14 +13,28 @@ const OPENAI_MODEL   = 'gpt-4o-mini'; // cheap + fast fallback
  * @returns {Promise<Response>}
  */
 async function callOpenAI(payload, apiKey) {
-    return fetch(OPENAI_API_URL, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ model: OPENAI_MODEL, ...payload })
-    });
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    try {
+        const response = await fetch(OPENAI_API_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ model: OPENAI_MODEL, ...payload }),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+            throw new Error('OpenAI request timed out. Please try again.');
+        }
+        throw err;
+    }
 }
 
 module.exports = { callOpenAI };

@@ -124,7 +124,7 @@ export function displayError(errorBox, error, onRetry = null) {
             : 'Retry';
 
         content += `
-            <button class="error-retry-btn" onclick="arguments[0].onRetry?.()">
+            <button class="error-retry-btn">
                 🔄 ${retryText}
             </button>
         `;

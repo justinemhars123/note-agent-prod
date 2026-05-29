@@ -1,31 +1,25 @@
-// ─── sanitize.js — Input and output sanitization ────────────────────────────
-// Prevents XSS attacks by sanitizing user input and AI output before rendering.
+// ─── sanitize.js — Input and output sanitization ─────────────────────────────
+// Uses DOMPurify — the industry-standard XSS sanitizer.
+// Replaces previous regex-based approach which was bypassable.
+
+import DOMPurify from './vendor/purify.es.mjs';
 
 /**
  * Sanitize a string to prevent XSS attacks.
- * Removes any script tags, event handlers, and dangerous content.
+ * Strips ALL HTML tags and attributes — returns plain text only.
  *
  * @param {string} str - Input string
- * @returns {string} - Sanitized string safe for textContent
+ * @returns {string} - Sanitized plain-text string
  */
 export function sanitizeText(str) {
     if (typeof str !== 'string') return '';
-
-    // Remove any HTML-like tags (defensive measure)
-    let sanitized = str
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-        .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-        .replace(/<embed[^>]*>/gi, '')
-        .replace(/<object[^>]*>/gi, '')
-        .replace(/on\w+\s*=\s*["'][^"']*["']/gi, ''); // Remove event handlers
-
-    return sanitized;
+    // ALLOWED_TAGS: [] means strip every HTML tag, leaving only text nodes
+    return DOMPurify.sanitize(str, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 }
 
 /**
  * Sanitize user input before sending to API.
- * Validates length and removes potentially dangerous characters.
+ * Validates length and sanitizes content.
  *
  * @param {string} input - User input
  * @param {number} maxLength - Maximum allowed length
@@ -68,15 +62,13 @@ export function sanitizeAIOutput(output) {
 }
 
 /**
- * Escape HTML special characters for safe display.
- * Useful for displaying user-generated content that might contain HTML chars.
+ * Escape HTML special characters for safe insertion into HTML contexts.
  *
  * @param {string} str - String with potentially dangerous HTML chars
  * @returns {string} - HTML-escaped string
  */
 export function escapeHtml(str) {
     if (typeof str !== 'string') return '';
-
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
@@ -91,19 +83,9 @@ export function escapeHtml(str) {
  */
 export function isSuspicious(str) {
     if (typeof str !== 'string') return false;
-
-    const dangerousPatterns = [
-        /<script/i,
-        /<iframe/i,
-        /<embed/i,
-        /<object/i,
-        /javascript:/i,
-        /on\w+\s*=/i,
-        /<img[^>]*on/i,
-        /<svg[^>]*on/i
-    ];
-
-    return dangerousPatterns.some(pattern => pattern.test(str));
+    // Run through DOMPurify — if output differs from input, it was dirty
+    const cleaned = DOMPurify.sanitize(str, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+    return cleaned !== str;
 }
 
 export default {
