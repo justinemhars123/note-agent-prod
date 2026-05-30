@@ -61,8 +61,8 @@ export async function initAuth() {
             await initSentryBrowser(config.sentryDsn);
         }
 
-        if (config.supabaseUrl && config.supabaseKey) {
-            supabase = createClient(config.supabaseUrl, config.supabaseKey);
+        if (config.supabaseUrl && config.supabaseAnonKey) {
+            supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
 
             // Get initial session
             const {
