@@ -45,7 +45,10 @@ const OPTIONAL_ENV = [
 const missingVars = [];
 for (const { key, hint, validator } of REQUIRED_ENV) {
     const val = process.env[key];
-    if (!val || (validator && !validator(val))) {
+    // If a validator exists, use it (allows alternate envs like SUPABASE_ANON_KEY);
+    // otherwise require the env var to be truthy.
+    const isValid = typeof validator === 'function' ? Boolean(validator(val)) : Boolean(val);
+    if (!isValid) {
         missingVars.push(`  ❌ ${key}\n     → ${hint}`);
     }
 }
