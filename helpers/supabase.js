@@ -89,4 +89,29 @@ async function getUserNotes(userId, token, limit = 20) {
     }
 }
 
-module.exports = { saveNote, getUserNotes, supabase };
+async function deleteNote(userId, noteId, token) {
+    if (!supabaseUrl || !supabaseKey) return false;
+
+    try {
+        const client = token
+            ? createClient(supabaseUrl, supabaseKey, {
+                  ...supabaseOptions,
+                  global: { headers: { Authorization: token } },
+              })
+            : supabase;
+
+        const { error } = await client
+            .from('notes')
+            .delete()
+            .eq('id', noteId)
+            .eq('user_id', userId);
+
+        if (error) { logger.error('❌ Supabase Delete Error:', error); return false; }
+        return true;
+    } catch (err) {
+        logger.error('❌ Supabase Delete Failed:', err);
+        return false;
+    }
+}
+
+module.exports = { saveNote, getUserNotes, deleteNote, supabase };

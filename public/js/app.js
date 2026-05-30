@@ -63,6 +63,7 @@ let typingInterval = null;
 let completedTasks = new Set();
 let currentMode = 'default';
 let currentResult = '';
+let isHistoryClearMode = false; // Track if we're in history clear mode
 const submitCooldown = createCooldown(1000); // Prevent spam: 1 request per second max
 const requester = createSmartRequester(5 * 60 * 1000); // 5-minute cache for identical requests
 
@@ -688,6 +689,7 @@ async function refreshHistory() {
         const data = await res.json();
         if (res.ok && data.notes) {
             history = data.notes.map((n) => ({
+                id: n.id,
                 text: n.ai_result,
                 mode: n.mode,
                 date: new Date(n.created_at).toLocaleString('en-US', {
@@ -720,11 +722,44 @@ async function refreshHistory() {
             $('historySidebar')?.classList.add('hidden');
             $('sidebarOverlay')?.classList.add('hidden');
         },
-        () => {
-            clearHistory();
-            refreshHistory();
-        }
+        async (selectedIds) => {
+            if (selectedIds === null) {
+                // Toggle clear mode
+                isHistoryClearMode = !isHistoryClearMode;
+                refreshHistory();
+            } else if (selectedIds && selectedIds.length > 0) {
+                // Delete selected items
+                await deleteSelectedHistoryItems(selectedIds);
+                isHistoryClearMode = false;
+                refreshHistory();
+            }
+        },
+        isHistoryClearMode
     );
+}
+
+// ─── Delete selected history items ────────────────────────────────────────────
+async function deleteSelectedHistoryItems(noteIds) {
+    const token = getAuthToken();
+    const headers = {};
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    try {
+        for (const noteId of noteIds) {
+            const res = await fetch(
+                `https://note-to-action-agent-backend.onrender.com/history/${noteId}`,
+                { method: 'DELETE', headers }
+            );
+            if (!res.ok) {
+                console.error(`Failed to delete note ${noteId}:`, res.statusText);
+            }
+        }
+    } catch (err) {
+        console.error('Error deleting history items:', err);
+        displayError($('errorBox'), 'Failed to delete selected items.');
+    }
 }
 
 // Browser due-date reminders

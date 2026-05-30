@@ -23,4 +23,28 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.delete('/:id', async (req, res) => {
+    // Delete a single note by ID. User must be authenticated.
+    if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userId = req.user.id;
+    const noteId = req.params.id;
+
+    try {
+        const token = req.headers.authorization;
+        const { deleteNote } = require('../helpers/supabase');
+        const result = await deleteNote(userId, noteId, token);
+        if (result) {
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ error: 'Could not delete note.' });
+        }
+    } catch (err) {
+        logger.error('Delete note error:', err);
+        res.status(500).json({ error: 'Could not delete note.' });
+    }
+});
+
 module.exports = router;

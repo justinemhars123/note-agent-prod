@@ -362,7 +362,7 @@ function makePlain(text) {
 }
 
 // ─── History rendering ────────────────────────────────────────────────────────
-export function renderHistorySection(historyData, onRestore, onClear) {
+export function renderHistorySection(historyData, onRestore, onClear, clearMode = false) {
     const section = document.getElementById('historySection');
     const list = document.getElementById('historyList');
     const clearBtn = document.getElementById('clearHistoryBtn');
@@ -374,43 +374,106 @@ export function renderHistorySection(historyData, onRestore, onClear) {
     }
 
     section.classList.remove('hidden');
-    if (clearBtn) {
-        clearBtn.onclick = onClear;
+    
+    if (clearMode) {
+        // CLEAR MODE: Show checkboxes on each item
+        clearBtn.textContent = '✕ Cancel';
+        clearBtn.classList.add('clear-mode-cancel');
+        
+        const selectedIds = new Set();
+
+        historyData.forEach((entry, index) => {
+            const safeDate = sanitizeText(String(entry.date ?? ''));
+            const safeMode = ['default', 'simple', 'meeting', 'email'].includes(entry.mode)
+                ? entry.mode
+                : 'default';
+
+            const itemContainer = document.createElement('div');
+            itemContainer.className = 'history-item-clear-mode';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'history-checkbox';
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    selectedIds.add(index);
+                } else {
+                    selectedIds.delete(index);
+                }
+            });
+
+            const details = document.createElement('details');
+            details.className = 'history-item';
+
+            const summary = document.createElement('summary');
+            summary.className = 'history-summary';
+            summary.textContent = `Result from ${safeDate}`;
+            details.appendChild(summary);
+
+            const body = document.createElement('div');
+            body.className = 'history-body';
+
+            const inner = document.createElement('div');
+            inner.className = 'todo-list';
+            renderTodoList(entry.text, inner, new Set(), safeMode);
+            body.appendChild(inner);
+
+            details.appendChild(body);
+
+            itemContainer.appendChild(checkbox);
+            itemContainer.appendChild(details);
+            list.appendChild(itemContainer);
+        });
+
+        // Add delete selected button
+        const deleteSelectedBtn = document.createElement('button');
+        deleteSelectedBtn.className = 'delete-selected-btn';
+        deleteSelectedBtn.textContent = '🗑️ Delete Selected';
+        deleteSelectedBtn.onclick = () => {
+            if (selectedIds.size > 0) {
+                onClear(Array.from(selectedIds).map(i => historyData[i].id).filter(Boolean));
+            }
+        };
+        list.appendChild(deleteSelectedBtn);
+    } else {
+        // NORMAL MODE: Show restore buttons
+        clearBtn.textContent = 'Clear';
+        clearBtn.classList.remove('clear-mode-cancel');
+        clearBtn.onclick = () => onClear(null); // null means toggle to clear mode
+        
+        historyData.forEach((entry) => {
+            // Sanitize all server-provided strings before touching the DOM
+            const safeDate = sanitizeText(String(entry.date ?? ''));
+            const safeMode = ['default', 'simple', 'meeting', 'email'].includes(entry.mode)
+                ? entry.mode
+                : 'default';
+
+            const details = document.createElement('details');
+            details.className = 'history-item';
+
+            const summary = document.createElement('summary');
+            summary.className = 'history-summary';
+            summary.textContent = `Result from ${safeDate}`;
+            details.appendChild(summary);
+
+            const body = document.createElement('div');
+            body.className = 'history-body';
+
+            const inner = document.createElement('div');
+            inner.className = 'todo-list';
+            renderTodoList(entry.text, inner, new Set(), safeMode);
+            body.appendChild(inner);
+
+            const restoreBtn = document.createElement('button');
+            restoreBtn.className = 'restore-btn';
+            restoreBtn.textContent = '↩ Restore this result';
+            restoreBtn.onclick = () => onRestore(entry.text, safeMode);
+            body.appendChild(restoreBtn);
+
+            details.appendChild(body);
+            list.appendChild(details);
+        });
     }
-
-    historyData.forEach((entry) => {
-        // Sanitize all server-provided strings before touching the DOM
-        const safeDate = sanitizeText(String(entry.date ?? ''));
-        const safeMode = ['default', 'simple', 'meeting', 'email'].includes(entry.mode)
-            ? entry.mode
-            : 'default';
-
-        const details = document.createElement('details');
-        details.className = 'history-item';
-
-        const summary = document.createElement('summary');
-        summary.className = 'history-summary';
-        // textContent is safe — but we sanitize the date string anyway for defence-in-depth
-        summary.textContent = `Result from ${safeDate}`;
-        details.appendChild(summary);
-
-        const body = document.createElement('div');
-        body.className = 'history-body';
-
-        const inner = document.createElement('div');
-        inner.className = 'todo-list';
-        renderTodoList(entry.text, inner, new Set(), safeMode);
-        body.appendChild(inner);
-
-        const restoreBtn = document.createElement('button');
-        restoreBtn.className = 'restore-btn';
-        restoreBtn.textContent = '↩ Restore this result';
-        restoreBtn.onclick = () => onRestore(entry.text, safeMode);
-        body.appendChild(restoreBtn);
-
-        details.appendChild(body);
-        list.appendChild(details);
-    });
 }
 
 // ─── Shake ────────────────────────────────────────────────────────────────────

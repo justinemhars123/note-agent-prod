@@ -901,6 +901,63 @@ button#submitBtn:disabled {
     box-shadow: none;
 }
 
+/* ── Clear mode styles ── */
+.history-item-clear-mode {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px;
+    background: var(--clr-surface);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-md);
+}
+
+.history-checkbox {
+    width: 18px;
+    height: 18px;
+    margin-top: 4px;
+    cursor: pointer;
+    accent-color: var(--clr-primary);
+    flex-shrink: 0;
+}
+
+.history-item-clear-mode .history-item {
+    border: none;
+    flex: 1;
+    margin: 0;
+}
+
+.delete-selected-btn {
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--clr-accent-red);
+    background: rgba(231, 76, 60, 0.08);
+    border: 1px solid rgba(231, 76, 60, 0.25);
+    border-radius: var(--radius-sm);
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: all var(--transition);
+    width: 100%;
+    margin-top: 12px;
+    box-shadow: none;
+}
+
+.delete-selected-btn:hover {
+    background: rgba(231, 76, 60, 0.15);
+    border-color: rgba(231, 76, 60, 0.5);
+    transform: none;
+    box-shadow: none;
+}
+
+.clear-mode-cancel {
+    color: var(--clr-text-dim) !important;
+}
+
+.clear-mode-cancel:hover {
+    color: var(--clr-accent-red) !important;
+}
+
 /* ============================================================
    CALENDAR TOOLTIP
    ============================================================ */

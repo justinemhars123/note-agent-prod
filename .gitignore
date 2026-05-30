@@ -32,3 +32,6 @@ supabase/.temp/
 *.ntvs*
 *.njsproj
 *.sln
+
+.vercel
+.env*
