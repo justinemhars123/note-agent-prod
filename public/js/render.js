@@ -431,7 +431,14 @@ export function renderHistorySection(historyData, onRestore, onClear, clearMode 
         deleteSelectedBtn.textContent = '🗑️ Delete Selected';
         deleteSelectedBtn.onclick = () => {
             if (selectedIds.size > 0) {
-                onClear(Array.from(selectedIds).map(i => historyData[i].id).filter(Boolean));
+                const idsToDelete = Array.from(selectedIds)
+                    .map(i => historyData[i].id)
+                    .filter(Boolean);
+                if (idsToDelete.length > 0) {
+                    onClear(idsToDelete);
+                } else {
+                    console.warn('No IDs available for deletion (local history only)');
+                }
             }
         };
         list.appendChild(deleteSelectedBtn);

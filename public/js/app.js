@@ -741,24 +741,39 @@ async function refreshHistory() {
 // ─── Delete selected history items ────────────────────────────────────────────
 async function deleteSelectedHistoryItems(noteIds) {
     const token = getAuthToken();
-    const headers = {};
+    const headers = {
+        'Content-Type': 'application/json',
+    };
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+    } else {
+        console.warn('No auth token available for deletion');
     }
 
+    let deletedCount = 0;
     try {
         for (const noteId of noteIds) {
+            console.log(`Deleting note: ${noteId}`);
             const res = await fetch(
                 `https://note-to-action-agent-backend.onrender.com/history/${noteId}`,
-                { method: 'DELETE', headers }
+                { 
+                    method: 'DELETE', 
+                    headers,
+                }
             );
-            if (!res.ok) {
-                console.error(`Failed to delete note ${noteId}:`, res.statusText);
+            if (res.ok) {
+                deletedCount++;
+                console.log(`✓ Deleted note: ${noteId}`);
+            } else {
+                console.error(`Failed to delete note ${noteId}:`, res.status, res.statusText);
             }
+        }
+        if (deletedCount > 0) {
+            showToast(`Deleted ${deletedCount} item(s)`, 'success');
         }
     } catch (err) {
         console.error('Error deleting history items:', err);
-        displayError($('errorBox'), 'Failed to delete selected items.');
+        displayError($('errorBox'), 'Failed to delete selected items. Check your connection and try again.');
     }
 }
 
