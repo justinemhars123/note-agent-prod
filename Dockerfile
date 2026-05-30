@@ -3,53 +3,38 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci
-
-# Copy source code
 COPY . .
-
-# Tests and linting are run in CI; skip during Docker image builds to avoid
-# requiring build-time secrets or slowing the image creation on Render.
 
 # Production stage
 FROM node:24-alpine
 
 WORKDIR /app
 
-# Install dumb-init to handle signals properly
 RUN apk add --no-cache dumb-init
-# Set production mode in the final image
 ENV NODE_ENV=production
 
-# Copy package files
 COPY package*.json ./
-
-# Install only production dependencies
 RUN npm ci --only=production
 
-# Copy source from builder
-COPY --from=builder /app . 
+# Copy only source files (NOT node_modules from builder)
+COPY --from=builder /app/server.js .
+COPY --from=builder /app/helpers ./helpers
+COPY --from=builder /app/routes ./routes
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/scripts ./scripts
 
-# Create non-root user for security and ensure permissions
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
     chown -R nodejs:nodejs /app
 
 USER nodejs
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD node -e "require('http').get('http://localhost:${PORT:-3001}', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
-# Expose port
 EXPOSE ${PORT:-3001}
 
-# Use dumb-init to handle signals
 ENTRYPOINT ["dumb-init", "--"]
-
-# Start application
 CMD ["node", "server.js"]
