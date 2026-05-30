@@ -31,7 +31,7 @@ export async function fetchTodoList(notes, mode = 'default', customPrompt = '', 
         headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch('/process', {
+    const response = await fetch('https://note-to-action-agent-backend.onrender.com/process', {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({ notes, mode, customPrompt, userId }),

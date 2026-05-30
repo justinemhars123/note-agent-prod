@@ -53,7 +53,7 @@ let currentSession = null;
 // Initialize Supabase Client
 export async function initAuth() {
     try {
-        const response = await fetch('/api/config');
+        const response = await fetch('https://note-to-action-agent-backend.onrender.com/api/config');
         const config = await response.json();
 
         // Boot Sentry as soon as we have the DSN
