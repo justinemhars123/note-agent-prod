@@ -86,17 +86,23 @@ const corsOptions = {
         if (!origin) {
             return callback(null, true);
         }
+
+        // Exact match
         if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error(`Origin ${origin} not allowed by CORS`));
+            return callback(null, true);
         }
+
+        // Wildcard: allow all *.vercel.app preview deployments
+        if (origin.endsWith('.vercel.app')) {
+            return callback(null, true);
+        }
+
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
-    // Authorization header is required for JWT Bearer tokens (Supabase Auth)
     allowedHeaders: ['Content-Type', 'Authorization'],
-    maxAge: 86400, // 24 hours
+    maxAge: 86400,
 };
 
 // ─── Security headers (helmet) ───────────────────────────────────────────────
