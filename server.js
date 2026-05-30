@@ -100,8 +100,9 @@ const corsOptions = {
         callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Type', 'Authorization'],
     maxAge: 86400,
 };
 
@@ -139,6 +140,10 @@ app.use(
 );
 
 app.use(cors(corsOptions));
+
+// Explicit preflight handler for DELETE requests
+app.options('/history/:id', cors(corsOptions));
+app.options('/history', cors(corsOptions));
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '10kb' }));
