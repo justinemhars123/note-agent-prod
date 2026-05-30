@@ -684,7 +684,7 @@ async function refreshHistory() {
         if (list) {
             list.innerHTML = `<div class="sidebar-loader"><div class="spinner"></div><span>Loading history...</span></div>`;
         }
-        const res = await fetch(`/history?userId=${userId}`, { headers });
+        const res = await fetch(`https://note-to-action-agent-backend.onrender.com/history?userId=${userId}`, { headers });
         const data = await res.json();
         if (res.ok && data.notes) {
             history = data.notes.map((n) => ({
