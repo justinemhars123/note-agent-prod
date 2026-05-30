@@ -1,5 +1,5 @@
 const express = require('express');
-const { getUserNotes } = require('../helpers/supabase');
+const { getUserNotes, deleteNote } = require('../helpers/supabase');
 const logger = require('../helpers/logger');
 
 const router = express.Router();
@@ -34,7 +34,6 @@ router.delete('/:id', async (req, res) => {
 
     try {
         const token = req.headers.authorization;
-        const { deleteNote } = require('../helpers/supabase');
         const result = await deleteNote(userId, noteId, token);
         if (result) {
             res.json({ success: true });
