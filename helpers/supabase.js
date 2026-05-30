@@ -24,6 +24,15 @@ const supabaseOptions = needTransport ? { realtime: { transport: wsTransport } }
 let supabase = null;
 
 if (supabaseUrl && supabaseKey) {
+    // Diagnostics for deploy logs: show node version, ws presence, and engines.node
+    try {
+        const pkg = require('../package.json');
+        const enginesNode = (pkg && pkg.engines && pkg.engines.node) || '';
+        logger.info('supabase: diagnostics', 'nodeVersion=' + process.version, 'needTransport=' + needTransport, 'wsLoaded=' + Boolean(wsTransport), 'engines.node=' + enginesNode);
+    } catch (err) {
+        logger.info('supabase: diagnostics', 'nodeVersion=' + process.version, 'needTransport=' + needTransport, 'wsLoaded=' + Boolean(wsTransport));
+    }
+
     supabase = createClient(supabaseUrl, supabaseKey, supabaseOptions);
     logger.info('📦 Supabase client initialized');
 } else {
