@@ -113,5 +113,25 @@ async function deleteNote(userId, noteId, token) {
         return false;
     }
 }
-
+async function deleteNote(userId, noteId, token) {
+    if (!supabaseUrl || !supabaseKey) return null;
+    try {
+        const client = token
+            ? createClient(supabaseUrl, supabaseKey, {
+                  ...supabaseOptions,
+                  global: { headers: { Authorization: token } },
+              })
+            : supabase;
+        const { error } = await client
+            .from('notes')
+            .delete()
+            .eq('id', noteId)
+            .eq('user_id', userId);
+        if (error) { logger.error('Delete error:', error); return null; }
+        return true;
+    } catch (err) {
+        logger.error('deleteNote failed:', err);
+        return null;
+    }
+}
 module.exports = { saveNote, getUserNotes, deleteNote, supabase };
