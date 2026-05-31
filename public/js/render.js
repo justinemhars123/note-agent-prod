@@ -379,6 +379,7 @@ export function renderHistorySection(historyData, onRestore, onClear, clearMode 
         // CLEAR MODE: Show checkboxes on each item
         clearBtn.textContent = '✕ Cancel';
         clearBtn.classList.add('clear-mode-cancel');
+        clearBtn.onclick = () => onClear(null); // null means toggle back to normal mode
         
         const selectedIds = new Set();
 
